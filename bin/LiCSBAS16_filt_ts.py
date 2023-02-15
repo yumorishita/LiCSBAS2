@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.5.1 20210311 Yu Morishita, GSI
+v1.6.0 20230116 Yu Morishita
 
 This script applies spatio-temporal filter (HP in time and LP in space with gaussian kernel, same as StaMPS) to the time series of displacement. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 1-3.
 
@@ -47,6 +47,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  -y  Width of temporal filter in yr (Default: auto, avg_interval*3)
  -r  Degree of deramp [1, bl, 2] (Default: no deramp)
      1: 1d ramp, bl: bilinear, 2: 2d polynomial
+ --demerr     Estimate and remove DEM error phase
  --hgt_linear Subtract topography-correlated component using a linear method
               (Default: Not apply)
  --hgt_min    Minumum hgt to take into account in hgt-linear (Default: 200m)
@@ -70,6 +71,8 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 #%% Change log
 '''
+v1.6.0 20230116 Yu Morishita
+ - Add --demerr option to estimate/remove DEM error phase
 v1.5.1 20210311 Yu Morishita, GSI
  - Include noise indices and LOS unit vector in cum.h5 file
 v1.5 20210309 Yu Morishita, GSI
@@ -137,7 +140,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.1"; date=20210311; author="Y. Morishita"
+    ver="1.6.0"; date=20230116; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -153,6 +156,7 @@ def main(argv=None):
     filtwidth_km = 2
     filtwidth_yr = []
     deg_ramp = []
+    demerrflag = False
     hgt_linearflag = False
     hgt_min = 200 ## meter
     hgt_max = 10000 ## meter
@@ -186,7 +190,7 @@ def main(argv=None):
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
-                           ["help", "hgt_linear", "hgt_min=", "hgt_max=",
+                           ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "n_para=", "range=", "range_geo=",
                             "ex_range=", "ex_range_geo=", "gpu"])
         except getopt.error as msg:
@@ -203,6 +207,8 @@ def main(argv=None):
                 filtwidth_yr = float(a)
             elif o == '-r':
                 deg_ramp = a
+            elif o == '--demerr':
+                demerrflag = True
             elif o == '--hgt_linear':
                 hgt_linearflag = True
             elif o == '--hgt_min':
@@ -334,6 +340,11 @@ def main(argv=None):
     else:
         hgt = []
 
+    ### demerr
+    if demerrflag:
+        bperp = np.float32(np.array(cumh5['bperp'][()].tolist()))
+        demerrfile = os.path.join(resultsdir, 'demerr')
+
 
     #%% --range[_geo] and --ex_range[_geo]
     if range_str: ## --range
@@ -397,6 +408,7 @@ def main(argv=None):
         print('filtwidth_yr:  {:.3f}'.format(filtwidth_yr), file=f)
         print('filtwidth_day:  {}'.format(int(filtwidth_yr*365.25)), file=f)
         print('deg_ramp:  {}'.format(deg_ramp), file=f)
+        print('demerr:  {}'.format(demerrflag*1), file=f)
         print('hgt_linear:  {}'.format(hgt_linearflag*1), file=f)
         print('hgt_min: {}'.format(hgt_min), file=f)
         print('hgt_max: {}'.format(hgt_max), file=f)
@@ -451,6 +463,49 @@ def main(argv=None):
         p.map(deramp_wrapper2, range(1, n_im))
         p.close()
         del cum_org
+
+
+    # %% DEM err
+    if demerrflag:
+        print('\nEstimate DEM error component,', flush=True)
+        # 20230116 working
+        G = np.stack((np.ones_like(dt_cum), dt_cum, bperp), axis=1)
+        demerr = np.zeros((length, width), dtype=np.float32)*np.nan
+        _vconst = np.zeros((length, width), dtype=np.float32)*np.nan
+        _vel = np.zeros((length, width), dtype=np.float32)*np.nan
+
+        bool_unnan = ~np.isnan(cum[0, :, :]).reshape(length, width) ## not all nan
+        cum_pt = cum.reshape(n_im, length*width)[:, bool_unnan.ravel()] #n_im x n_pt
+        n_pt_unnan = bool_unnan.sum()
+        vconst_tmp = np.zeros((n_pt_unnan), dtype=np.float32)*np.nan
+        vel_tmp = np.zeros((n_pt_unnan), dtype=np.float32)*np.nan
+        demerr_tmp = np.zeros((n_pt_unnan), dtype=np.float32)*np.nan
+
+        bool_nonan_pt = np.all(~np.isnan(cum_pt), axis=0)
+
+        ### First, calc point without nan
+        print('  First, solving {0:6}/{1:6}th points with full cum...'.format(bool_nonan_pt.sum(), n_pt_unnan), flush=True)
+        vconst_tmp[bool_nonan_pt], vel_tmp[bool_nonan_pt], demerr_tmp[bool_nonan_pt] = np.linalg.lstsq(G, cum_pt[:, bool_nonan_pt], rcond=None)[0]
+
+        ### Next, calc point with nan
+        print('  Next, solving {0:6}/{1:6}th points with nan in cum...'.format((~bool_nonan_pt).sum(), n_pt_unnan), flush=True)
+
+        mask_cum = ~np.isnan(cum_pt[:, ~bool_nonan_pt])
+        vconst_tmp[~bool_nonan_pt], vel_tmp[~bool_nonan_pt], demerr_tmp[~bool_nonan_pt] = inv_lib.censored_lstsq_slow(G, cum_pt[:, ~bool_nonan_pt], mask_cum)
+        _vconst[bool_unnan], _vel[bool_unnan], demerr[bool_unnan] = vconst_tmp, vel_tmp, demerr_tmp
+
+        demerr.tofile(demerrfile)
+
+        # Compute DEM err phase and subtract
+        for i in range(n_im):
+            ## Output comparison image of DEM error
+            data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle) for data in [cum[i, :, :]*mask, demerr*bperp[i], cum[i, :, :]*mask-demerr*bperp[i]]]
+            pngfile = os.path.join(filtcumdir, imdates[i]+'_demerr.png')
+            deramp_title3 = ['Before DEMerr corr ({}pi/cycle)'.format(cycle*2), 'DEM err phase (bperp:{:.0f}m)'.format(bperp[i]), 'After DEMerr corr ({}pi/cycle)'.format(cycle*2)]
+            plot_lib.make_3im_png(data3, pngfile, cmap_wrap, deramp_title3, vmin=-np.pi, vmax=np.pi, cbar=False)
+
+            # Subtract
+            cum[i, :, :] = cum[i, :, :] - demerr*bperp[i]
 
 
     #%% Filter each image
@@ -605,6 +660,13 @@ def main(argv=None):
     vmin = np.nanpercentile(vconst, 1)
     vmax = np.nanpercentile(vconst, 99)
     plot_lib.make_im_png(vconst, pngfile, cmap_vel, title, vmin, vmax)
+
+    if demerrflag:
+        pngfile = os.path.join(resultsdir,'demerr.png')
+        title = 'Coefficient of DEM error phase (mm/m)'
+        vmin = np.nanpercentile(demerr, 1)
+        vmax = np.nanpercentile(demerr, 99)
+        plot_lib.make_im_png(demerr, pngfile, cmap_vel, title, vmin, vmax)
 
     if maskflag:
         pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
