@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.6.3 20201207 Yu Morishita, GSI
+v1.6.4 20230215 Yu Morishita
 
 ========
 Overview
@@ -38,6 +38,8 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
 """
 #%% Change log
 '''
+v1.6.4 20230215 Yu Morishita
+ - Update LiCSARweb URL
 v1.6.3 20201207 Yu Morishita, GSI
  - Download network.png
  - Search latest epoch for mli to save times
@@ -92,7 +94,7 @@ def main(argv=None):
         argv = sys.argv
         
     start = time.time()
-    ver='1.6.3'; date=20201207; author="Y. Morishita"
+    ver='1.6.4'; date=20230215; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -158,8 +160,7 @@ def main(argv=None):
     if not os.path.exists(outdir): os.mkdir(outdir)
     os.chdir(outdir)
 
-    LiCSARweb = 'http://gws-access.ceda.ac.uk/public/nceo_geohazards/LiCSAR_products/'
-
+    LiCSARweb = 'https://gws-access.jasmin.ac.uk/public/nceo_geohazards/LiCSAR_products/'
 
     #%% ENU and hgt
     for ENU in ['E', 'N', 'U', 'hgt']:
