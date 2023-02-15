@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.1.3 20210802 Yu Morishita, GSI
+v1.1.4 20230201 Yu Morishita
 
 This script decomposes 2 (or more) LOS displacement data to EW and UD components assuming no NS displacement (neglecting NS). Positive values in the decomposed data mean eastward and upward displacement. The multiple LOS input data can have different coverage and resolution as they are resampled to the common area and resolution during the processing.
 
@@ -31,6 +31,9 @@ LiCSBAS_decomposeLOS.py -f files.txt [-o outfile] [-r resampleAlg] [--out_stats]
 """
 #%% Change log
 '''
+v1.1.4 20230201 Yu Morishita
+ - Bug fix in LOSu (LOSu was filled by 1 instead of 0 where LOSen=0)
+   Wrong results were returned if multiple data with different coverage used
 v1.1.3 20210802 Yu Morishita, GSI
  - Bug fix for identifying LOS direction
 v1.1.2 20210209 Yu Morishita, GSI
@@ -65,7 +68,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver='1.1.3'; date=20210802; author="Y. Morishita"
+    ver='1.1.4'; date=20230201; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -210,6 +213,7 @@ def main(argv=None):
         _LOSn = gdal.Warp("", LOSn_tifs[i], format='MEM', outputBounds=(lon_w, lat_s, lon_e, lat_n), width=width, height=length, resampleAlg=resampleAlg, srcNodata=np.nan).ReadAsArray()
         _LOSu = np.sqrt(1-_LOSn**2-LOSe_list[i]**2)
         _LOSu[np.iscomplex(_LOSu)] = 0
+        _LOSu[_LOSu==1] = 0
         LOSu_list.append(_LOSu)
         del _LOSn, _LOSu
         data_list[i][data_list[i]==0] = np.nan
