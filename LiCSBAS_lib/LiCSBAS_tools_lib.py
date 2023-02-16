@@ -8,6 +8,9 @@ Python3 library of time series analysis tools for LiCSBAS.
 =========
 Changelog
 =========
+v1.9 20230216 Yu Morishita
+ - Avoid error in new matplotlib in get_cmap
+ - Make cm_insar perceptually uniform
 v1.8 20210309 Yu Morishita, GSI
  - Add GPU option to fit2dh (but not recommended)
 v1.7 20210205 Yu Morishita, GSI
@@ -43,6 +46,7 @@ import dateutil
 import datetime as dt
 import numpy as np
 import warnings
+import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap as LSC
 from matplotlib import pyplot as plt
 
@@ -94,20 +98,24 @@ def comp_size_time(file_remote, file_local):
 
 #%%
 def cm_insar():
+    """
+    Perceptually uniform InSAR colormap
+    """
     rgbs = np.zeros((256,3), dtype=np.uint8)
 
-    for kk in range(85):
-        rgbs[kk,0] = kk*3
-        rgbs[kk,1] = 255-kk*3
+    for kk in range(106):
+        rgbs[kk,0] = int(kk/106*255)
+        rgbs[kk,1] = 255-rgbs[kk,0]
         rgbs[kk,2] = 255
 
-    rgbs[85:170,0] = rgbs[0:85,2]
-    rgbs[85:170,1] = rgbs[0:85,0]
-    rgbs[85:170,2] = rgbs[0:85,1]
+    rgbs[106:212,0] = rgbs[0:106,2]
+    rgbs[106:212,1] = rgbs[0:106,0]
+    rgbs[106:212,2] = rgbs[0:106,1]
 
-    rgbs[170:255,0] = rgbs[0:85,1]
-    rgbs[170:255,1] = rgbs[0:85,2]
-    rgbs[170:255,2] = rgbs[0:85,0]
+    for kk in range(43):
+        rgbs[kk+212,2] = int(kk/43*255)
+        rgbs[kk+212,0] = 255-rgbs[kk+212,2]
+        rgbs[kk+212,1] = 255
 
     rgbs[255,0] = 0
     rgbs[255,1] = 255
@@ -115,6 +123,18 @@ def cm_insar():
 
     rgbs = np.roll(rgbs, int(256/2), axis=0)  #shift green to the center
     rgbs = (rgbs/255.0*200+55)/255.0
+
+    ma_size = 51 # moving average, should be odd number
+    ma_size_half = int(ma_size/2)
+    rgb_ex = np.zeros((256+ma_size_half*2, 3), dtype=np.float32)
+    rgb_ex[0:ma_size_half, :] = rgbs[-ma_size_half:, :]
+    rgb_ex[ma_size_half:ma_size_half+256, :] = rgbs
+    rgb_ex[-ma_size_half:, :] = rgbs[:ma_size_half, :]
+    rgb_ma = np.zeros_like(rgbs)
+    for i in range(3):
+        rgb_ma[:, i] = np.convolve(rgb_ex[:, i], np.ones(ma_size)/ma_size, 'valid')
+
+    rgbs = rgb_ma
 
     return LSC.from_list('cm_insar', rgbs)
 
@@ -428,7 +448,8 @@ def get_cmap(cmap_name, cmapN=256):
     if flag >= 1:
         if cmap_name.endswith('_r'):
             _cmap = _cmap.reversed()
-        plt.cm.register_cmap(name = cmap_name, cmap = _cmap)
+        if cmap_name not in plt.colormaps():
+            mpl.colormaps.register(_cmap, name=cmap_name)
 
     cmap = plt.get_cmap(cmap_name, cmapN)
 

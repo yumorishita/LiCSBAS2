@@ -246,8 +246,8 @@ def main(argv=None):
         print('Calc velocity and annual components...')
         amp = np.zeros((length, width), dtype=np.float32)*np.nan
         delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
-        ampfile = outfile.replace('vel', 'amp')
-        dtfile = outfile.replace('vel', 'dt')
+        ampfile = outfile[::-1].replace('lev', 'pma', 1)[::-1]
+        dtfile = outfile[::-1].replace('lev', 'td', 1)[::-1]
 
         vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp, dt_cum, imdates[0])
         vel.tofile(outfile)
