@@ -3,7 +3,7 @@
 v1.5.5 20201119 Yu Morishita, GSI
 
 This script applies a tropospheric correction to unw data using GACOS data. GACOS data may be automatically downloaded from COMET-LiCS web at step01 (if available), or could be externally obtained by requesting on a GACOS web (http://www.gacos.net/).
-If you request the GACOS data through the GACOS web, the dates and time of interest can be found in baselines and slc.mli.par, respectively. These are also available on the COMET-LiCS web portal. Once the GACOS data are ready, download the tar.gz, uncompress it, and put into GACOS dir. 
+If you request the GACOS data through the GACOS web, the dates and time of interest can be found in baselines and slc.mli.par, respectively. These are also available on the COMET-LiCS web portal. Once the GACOS data are ready, download the tar.gz, uncompress it, and put into GACOS dir.
 Existing files are not re-created to save time, i.e., only the newly available data will be processed. The impact of the correction can be visually checked by showing GACOS_info.png and */*.gacos.png. This step is optional.
 
 ===============
@@ -18,7 +18,7 @@ Inputs in GEOCml*/ :
  - slc.mli.par
 
 Inputs in GACOS/ :
- - yyyymmdd.sltd.geo.tif  and/or 
+ - yyyymmdd.sltd.geo.tif  and/or
  - yyyymmdd.ztd[.rsc]     and/or
  - yyyymmdd.ztd.tif
 
@@ -87,7 +87,6 @@ import glob
 import numpy as np
 from osgeo import gdal
 import multiprocessing as multi
-import SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -104,7 +103,7 @@ def fillhole(ztd):
     0 in ztd means no data.
     """
     length, width = ztd.shape
-    
+
     ### Add 1 pixel margin to ztd data filled with 0
     ztd1 = np.zeros((length+2, width+2), dtype=np.float32)
     ztd1[1:length+1, 1:width+1] = ztd
@@ -123,9 +122,9 @@ def fillhole(ztd):
     _n_ztd[_n_ztd==0] = 1 # avoid 0 division
     _ztd = _ztd/_n_ztd
 
-    ### Fill hole 
+    ### Fill hole
     ztd[ztd==0] = _ztd[ztd==0]
-    
+
     return ztd
 
 
@@ -156,11 +155,11 @@ def make_hdr(ztdpar, hdrfile):
 
 #%% Main
 def main(argv=None):
-    
+
     #%% Check argv
     if argv == None:
         argv = sys.argv
-        
+
     start = time.time()
     ver="1.5.5"; date=20201119; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
@@ -176,7 +175,7 @@ def main(argv=None):
     in_dir = []
     out_dir = []
     gacosdir = 'GACOS'
-    resampleAlg = 'cubicspline'# None # 'cubic' 
+    resampleAlg = 'cubicspline'# None # 'cubic'
     fillholeflag = False
     try:
         n_para = len(os.sched_getaffinity(0))
@@ -184,7 +183,7 @@ def main(argv=None):
         n_para = multi.cpu_count()
 
     q = multi.get_context('fork')
-    cmap_wrap = SCM.romaO
+    cmap_wrap = tools_lib.get_cmap('cm_insar')
 
     #%% Read options
     try:
@@ -225,8 +224,8 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
-    
-    
+
+
     #%% Read data information
     ### Directory
     in_dir = os.path.abspath(in_dir)
@@ -246,7 +245,7 @@ def main(argv=None):
     radar_frequency = float(io_lib.get_param_par(mlipar, 'radar_frequency')) #Hz
     wavelength = speed_of_light/radar_frequency #meter
     m2r_coef = 4*np.pi/wavelength
-    
+
     if wavelength > 0.2: ## L-band
         cycle = 1.5  # 2pi/cycle for png
     else: ## C-band
@@ -263,7 +262,7 @@ def main(argv=None):
     lats_geo = latn_geo+dlat_geo*(length_geo-1)
     lone_geo = lonw_geo+dlon_geo*(width_geo-1)
     outputBounds = (lonw_geo, lats_geo, lone_geo, latn_geo)
-    
+
     ### Check coordinate
     if width_unw!=width_geo or length_unw!=length_geo:
         print('\n{} seems to contain files in radar coordinate!!\n'.format(in_dir), file=sys.stderr)
@@ -282,7 +281,7 @@ def main(argv=None):
     n_im = len(imdates)
 
 
-    #%% Process ztd files 
+    #%% Process ztd files
     print('\nConvert ztd/sltd.geo.tif files to sltd.geo files...', flush=True)
 
     no_gacos_imfile = os.path.join(out_dir, 'no_gacos_im.txt')
@@ -305,33 +304,33 @@ def main(argv=None):
             _n_para = n_im2
         else:
             _n_para = n_para
-            
+
         print('  {} parallel processing...'.format(_n_para), flush=True)
         p = q.Pool(_n_para)
         no_gacos_imds = p.map(convert_wrapper, range(n_im2))
         p.close()
-    
+
         for imd in no_gacos_imds:
             if imd is not None:
                 with open(no_gacos_imfile, mode='a') as fnogacos:
                     print('{}'.format(imd), file=fnogacos)
-    
-    
+
+
     #%% Correct unw files
     print('\nCorrect unw data...', flush=True)
-    ### Information files    
+    ### Information files
     gacinfofile = os.path.join(out_dir, 'GACOS_info.txt')
     if not os.path.exists(gacinfofile):
         ### Add header
         with open(gacinfofile, "w") as f:
             print(' Phase STD (rad) Before After  ReductionRate', file=f)
-    
+
     no_gacos_ifgfile = os.path.join(out_dir, 'no_gacos_ifg.txt')
     if os.path.exists(no_gacos_ifgfile): os.remove(no_gacos_ifgfile)
 
     ### First check if already corrected unw exist
     ifgdates2 = []
-    for i, ifgd in enumerate(ifgdates): 
+    for i, ifgd in enumerate(ifgdates):
         out_dir1 = os.path.join(out_dir, ifgd)
         unw_corfile = os.path.join(out_dir1, ifgd+'.unw')
         if not os.path.exists(unw_corfile):
@@ -347,12 +346,12 @@ def main(argv=None):
             _n_para = n_ifg2
         else:
             _n_para = n_para
-            
+
         print('  {} parallel processing...'.format(_n_para), flush=True)
         p = q.Pool(_n_para)
         _return = p.map(correct_wrapper, range(n_ifg2))
         p.close()
-    
+
         for i in range(n_ifg2):
             if _return[i][0] == 1:
                 with open(no_gacos_ifgfile, mode='a') as fnogacos:
@@ -360,23 +359,23 @@ def main(argv=None):
             elif _return[i][0] == 2:
                 with open(gacinfofile, "a") as f:
                     print('{0}  {1:4.1f}  {2:4.1f} {3:5.1f}%'.format(*_return[i][1]), file=f)
-    
+
     print("", flush=True)
-    
-    
+
+
     #%% Create correlation png
     pngfile = os.path.join(out_dir, 'GACOS_info.png')
     plot_lib.plot_gacos_info(gacinfofile, pngfile)
-    
-    
+
+
     #%% Copy other files
     files = glob.glob(os.path.join(in_dir, '*'))
     for file in files:
         if not os.path.isdir(file): #not copy directory, only file
             print('Copy {}'.format(os.path.basename(file)), flush=True)
             shutil.copy(file, out_dir)
-    
-    
+
+
     #%% Finish
     elapsed_time = time.time()-start
     hour = int(elapsed_time/3600)
@@ -441,9 +440,9 @@ def convert_wrapper(ix_im):
         if os.path.exists(bilfile): os.remove(bilfile)
         make_hdr(ztdfile+'.rsc', hdrfile)
         os.symlink(os.path.relpath(ztdfile, sltddir), bilfile)
-        
+
         ## Check read error with unkown cause
-        if gdal.Info(bilfile) is None: 
+        if gdal.Info(bilfile) is None:
             ### Create new ztd by adding 0.0001m
             print('{} cannot open, but trying minor update. You can ignore this error unless this script stops.'.format(ztdfile))
             shutil.copy2(ztdfile, ztdfile+'.org') ## Backup
@@ -473,7 +472,7 @@ def convert_wrapper(ix_im):
     ### Fill hole is specified
     if fillholeflag:
         sltd_geo = fillhole(sltd_geo)
-    
+
     ### Output as sltd.geo
     sltd_geofile = os.path.join(sltddir, imd+'.sltd.geo')
     sltd_geo.tofile(sltd_geofile)
@@ -491,10 +490,10 @@ def correct_wrapper(i):
     sd = ifgd[-8:]
     msltdfile = os.path.join(sltddir, md+'.sltd.geo')
     ssltdfile = os.path.join(sltddir, sd+'.sltd.geo')
-    
+
     in_dir1 = os.path.join(in_dir, ifgd)
     out_dir1 = os.path.join(out_dir, ifgd)
-    
+
     ### Check if sltd available for both primary and secondary. If not continue
     ## Not use in tsa because loop cannot be closed
     if not (os.path.exists(msltdfile) and os.path.exists(ssltdfile)):
@@ -505,23 +504,23 @@ def correct_wrapper(i):
     if not os.path.exists(out_dir1): os.mkdir(out_dir1)
     unwfile = os.path.join(in_dir1, ifgd+'.unw')
     unw_corfile = os.path.join(out_dir1, ifgd+'.unw')
-    
+
     ### Calculate dsltd
     msltd = io_lib.read_img(msltdfile, length_unw, width_unw)
     ssltd = io_lib.read_img(ssltdfile, length_unw, width_unw)
 
     msltd[msltd==0] = np.nan
     ssltd[ssltd==0] = np.nan
-    
+
     dsltd = ssltd-msltd
-    
+
     ### Correct unw
     unw = io_lib.read_img(unwfile, length_unw, width_unw)
-    
+
     unw[unw==0] = np.nan
     unw_cor = unw-dsltd
     unw_cor.tofile(unw_corfile)
-    
+
     ### Calc std
     std_unw = np.nanstd(unw)
     std_unwcor = np.nanstd(unw_cor)
@@ -530,13 +529,13 @@ def correct_wrapper(i):
     ### Link cc
     if not os.path.exists(os.path.join(out_dir1, ifgd+'.cc')):
         os.symlink(os.path.relpath(os.path.join(in_dir1, ifgd+'.cc'), out_dir1), os.path.join(out_dir1, ifgd+'.cc'))
-        
+
     ### Output png for comparison
     data3 = [np.angle(np.exp(1j*(data/cycle))*cycle) for data in [unw, unw_cor, dsltd]]
     title3 = ['unw_org (STD: {:.1f} rad)'.format(std_unw), 'unw_cor (STD: {:.1f} rad)'.format(std_unwcor), 'dsltd ({:.1f}% reduced)'.format(rate)]
     pngfile = os.path.join(out_dir1, ifgd+'.gacos.png')
     plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
-    
+
     ## Output png for corrected unw
     pngfile = os.path.join(out_dir1, ifgd+'.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle*2)

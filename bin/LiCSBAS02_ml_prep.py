@@ -8,7 +8,7 @@ This script converts GeoTIFF files of unw and cc to float32 and uint8 format, re
 Input & output files
 ====================
 Inputs:
- - GEOC/    
+ - GEOC/
    - yyyymmdd_yyyymmdd/
      - yyyymmdd_yyyymmdd.geo.unw.tif
      - yyyymmdd_yyyymmdd.geo.cc.tif
@@ -89,7 +89,6 @@ import glob
 import numpy as np
 import subprocess as subp
 import multiprocessing as multi
-import SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -102,11 +101,11 @@ class Usage(Exception):
 
 #%% Main
 def main(argv=None):
-   
+
     #%% Check argv
     if argv == None:
         argv = sys.argv
-        
+
     start = time.time()
     ver="1.7.4"; date=20201119; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
@@ -126,7 +125,7 @@ def main(argv=None):
     except:
         n_para = multi.cpu_count()
 
-    cmap_wrap = SCM.romaO 
+    cmap_wrap = tools_lib.get_cmap('cm_insar')
     cycle = 3
     n_valid_thre = 0.5
     q = multi.get_context('fork')
@@ -163,7 +162,7 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
- 
+
 
     #%% Directory and file setting
     geocdir = os.path.abspath(geocdir)
@@ -199,7 +198,7 @@ def main(argv=None):
 
         else:
             enutif = enutif[0] ## first one
-                
+
         ### Create float
         data = gdal.Open(enutif).ReadAsArray()
         data[data==0] = np.nan
@@ -220,11 +219,11 @@ def main(argv=None):
         mlitif = mlitif[0] ## First one
         mli = np.float32(gdal.Open(mlitif).ReadAsArray())
         mli[mli==0] = np.nan
-    
+
         if nlook != 1:
             ### Multilook
             mli = tools_lib.multilook(mli, nlook, nlook)
-    
+
         mlifile = os.path.join(outdir, 'slc.mli')
         mli.tofile(mlifile)
         mlipngfile = mlifile+'.png'
@@ -248,7 +247,7 @@ def main(argv=None):
         if nlook != 1:
             ### Multilook
             hgt = tools_lib.multilook(hgt, nlook, nlook)
-    
+
         hgtfile = os.path.join(outdir, 'hgt')
         hgt.tofile(hgtfile)
         hgtpngfile = hgtfile+'.png'
@@ -264,10 +263,10 @@ def main(argv=None):
     print('\nCreate unw and cc', flush=True)
     ifgdates = tools_lib.get_ifgdates(geocdir)
     n_ifg = len(ifgdates)
-    
+
     ### First check if float already exist
     ifgdates2 = []
-    for i, ifgd in enumerate(ifgdates): 
+    for i, ifgd in enumerate(ifgdates):
         ifgdir1 = os.path.join(outdir, ifgd)
         unwfile = os.path.join(ifgdir1, ifgd+'.unw')
         ccfile = os.path.join(ifgdir1, ifgd+'.cc')
@@ -281,13 +280,13 @@ def main(argv=None):
     if n_ifg2 > 0:
         if n_para > n_ifg2:
             n_para = n_ifg2
-            
+
         ### Create float with parallel processing
         print('  {} parallel processing...'.format(n_para), flush=True)
         p = q.Pool(n_para)
         rc = p.map(convert_wrapper, range(n_ifg2))
         p.close()
-        
+
         ifgd_ok = []
         for i, _rc in enumerate(rc):
             if _rc == 1:
@@ -295,7 +294,7 @@ def main(argv=None):
                     print('{}'.format(ifgdates2[i]), file=f)
             elif _rc == 0:
                 ifgd_ok = ifgdates2[i] ## readable tiff
-        
+
         ### Read info
         ## If all float already exist, this will not be done, but no problem because
         ## par files should alerady exist!
@@ -332,19 +331,19 @@ def main(argv=None):
         print('\nCreate EQA.dem_par', flush=True)
 
         text = ["Gamma DIFF&GEO DEM/MAP parameter file",
-              "title: DEM", 
+              "title: DEM",
               "DEM_projection:     EQA",
               "data_format:        REAL*4",
               "DEM_hgt_offset:          0.00000",
               "DEM_scale:               1.00000",
-              "width: {}".format(width), 
-              "nlines: {}".format(length), 
-              "corner_lat:     {}  decimal degrees".format(lat_n_g), 
-              "corner_lon:    {}  decimal degrees".format(lon_w_g), 
-              "post_lat: {} decimal degrees".format(dlat), 
-              "post_lon: {} decimal degrees".format(dlon), 
-              "", 
-              "ellipsoid_name: WGS 84", 
+              "width: {}".format(width),
+              "nlines: {}".format(length),
+              "corner_lat:     {}  decimal degrees".format(lat_n_g),
+              "corner_lon:    {}  decimal degrees".format(lon_w_g),
+              "post_lat: {} decimal degrees".format(dlat),
+              "post_lon: {} decimal degrees".format(dlon),
+              "",
+              "ellipsoid_name: WGS 84",
               "ellipsoid_ra:        6378137.000   m",
               "ellipsoid_reciprocal_flattening:  298.2572236",
               "",
@@ -357,7 +356,7 @@ def main(argv=None):
               "datum_rotation_beta:   0.00000e+00   arc-sec",
               "datum_rotation_gamma:  0.00000e+00   arc-sec",
               "datum_country_list: Global Definition, WGS84, World\n"]
-    
+
         with open(dempar, 'w') as f:
             f.write('\n'.join(text))
 
@@ -444,7 +443,7 @@ def convert_wrapper(i):
     ### Make png
     unwpngfile = os.path.join(ifgdir1, ifgd+'.unw.png')
     plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), unwpngfile, cmap_wrap, ifgd+'.unw', vmin=-np.pi, vmax=np.pi, cbar=False)
-    
+
     return 0
 
 
