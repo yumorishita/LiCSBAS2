@@ -93,7 +93,7 @@ def main(argv=None):
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_amp = 'viridis_r'
-    cmap_dt = SCM.romaO.reversed()
+    cmap_wrap = tools_lib.get_cmap('cm_insar')
 
 
     #%% Read options

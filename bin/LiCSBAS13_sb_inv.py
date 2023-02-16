@@ -187,7 +187,7 @@ def main(argv=None):
     cmap_vel = SCM.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    cmap_wrap = SCM.romaO
+    cmap_wrap = tools_lib.get_cmap('cm_insar')
     q = multi.get_context('fork')
     compress = 'gzip'
 
