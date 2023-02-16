@@ -583,7 +583,8 @@ if __name__ == "__main__":
         if lastevent:  ## Time series plot
             printcoords(lastevent)
 
-    RS = RectangleSelector(axv, line_select_callback, drawtype='box', useblit=True, button=[3], spancoords='pixels', interactive=False)
+    RS = RectangleSelector(axv, line_select_callback, useblit=True, button=[3],
+                           spancoords='pixels', interactive=False)
 
     plt.connect('key_press_event', RS)
 
@@ -679,6 +680,7 @@ if __name__ == "__main__":
     tslider.ax.bar(imdates_ordinal, np.ones(len(imdates_ordinal)), facecolor='black', width=4)
     tslider.ax.bar(imdates_ordinal[ix_m], 1, facecolor='red', width=8)
 
+    # Not working... don't know why
     loc_tslider =  tslider.ax.xaxis.set_major_locator(mdates.AutoDateLocator())
     try: # Only support from Matplotlib 3.1!
         tslider.ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_tslider))
@@ -770,8 +772,8 @@ if __name__ == "__main__":
         else:
             lastevent = event  ## Update last event
 
-        ii = np.int(np.round(event.ydata))
-        jj = np.int(np.round(event.xdata))
+        ii = int(np.round(event.ydata))
+        jj = int(np.round(event.xdata))
 
         ### Plot on image window
         ii1h = ii-0.5; ii2h = ii+1-0.5 ## Shift half for plot
@@ -902,4 +904,3 @@ if __name__ == "__main__":
         warnings.simplefilter('ignore', UserWarning)
         plt.show()
     pv.canvas.mpl_disconnect(cid)
-

@@ -54,16 +54,19 @@ def make_im_png(data, pngfile, cmap, title, vmin=None, vmax=None, cbar=True):
         interp = 'nearest'
     else:
         interp = 'nearest' #'antialiased'
-    
+
     length, width = data.shape
     figsizex = 8
     xmergin = 2 if cbar else 0
     figsizey = int((figsizex-xmergin)*(length/width))+1
-    
+
+    if data.dtype==np.float32:
+        data[data==0] = np.nan
+
     ### Plot
     fig, ax = plt.subplots(1, 1, figsize=(figsizex, figsizey))
     plt.tight_layout()
-    
+
     im = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap, interpolation=interp)
     ax.set_xticklabels([])
     ax.set_yticklabels([])
@@ -72,7 +75,7 @@ def make_im_png(data, pngfile, cmap, title, vmin=None, vmax=None, cbar=True):
 
     plt.savefig(pngfile)
     plt.close()
-    
+
     return
 
 
@@ -95,10 +98,12 @@ def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
     figsizex = 12
     xmergin = 4 if cbar else 0
     figsizey = int((figsizex-xmergin)/3*length/width)+2
-    
+
     fig = plt.figure(figsize = (figsizex, figsizey))
 
     for i in range(3):
+        if data3[i].dtype==np.float32:
+            data3[i][data3[i]==0] = np.nan # as no data
         ax = fig.add_subplot(1, 3, i+1) #index start from 1
         im = ax.imshow(data3[i], vmin=vmin, vmax=vmax, cmap=cmap, interpolation=interp)
         ax.set_title(title3[i])
@@ -109,26 +114,26 @@ def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
     plt.tight_layout()
     plt.savefig(pngfile)
     plt.close()
-   
-    return 
+
+    return
 
 
-#%% 
+#%%
 def plot_gacos_info(gacos_infofile, pngfile):
     figsize = (7, 3) #3x7
     sizec, colorc, markerc, alphac = 2, 'k', 'o', 0.8
-    
+
     ### Figure
     fig = plt.figure(figsize=figsize)
     ax1 = fig.add_subplot(1, 2, 1) #index start from 1
     ax2 = fig.add_subplot(1, 2, 2) #index start from 1
-    
+
     ### Read data
     with open(gacos_infofile, "r") as f:
         info = f.readlines()[1:]
 
-    std_bf, std_af, rate = [], [], []; 
-    
+    std_bf, std_af, rate = [], [], [];
+
     for line in info:
         date, std_bf1, std_af1, rate1 = line.split()
         if std_bf1=='0.0' or std_bf1=='nan' or std_af1=='0.0' or std_af1=='nan':
@@ -136,7 +141,7 @@ def plot_gacos_info(gacos_infofile, pngfile):
         std_bf.append(float(std_bf1))
         std_af.append(float(std_af1))
         rate.append(float(rate1[:-1]))
-    
+
     std_bf = np.array(std_bf)
     std_af = np.array(std_af)
     rate = np.array(rate)
@@ -177,14 +182,14 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
     hgt1 = hgt[~bool_nan][ix_hgt1]
     fit_hgt0 = fit_hgt[~bool_nan][ix_hgt0]
     fit_hgt1 = fit_hgt[~bool_nan][ix_hgt1]
-    
+
     ### Downsample data to plot large number of scatters fast
     hgt_data_bf = np.stack((np.round(hgt[~bool_nan]), np.round(data_bf[~bool_nan], 1))).T  ## Round values
     hgt_data_bf = np.unique(hgt_data_bf, axis = 0)  ## Keep only uniques
     hgt_data_af = np.stack((np.round(hgt[~bool_nan]), np.round(data_af[~bool_nan], 1))).T  ## Round values
     hgt_data_af = np.unique(hgt_data_af, axis = 0)  ## Keep only uniques
 
-    ### Plot    
+    ### Plot
     figsize = (5, 4)
     sbf, cbf, mbf, zbf, lbf = 0.2, '0.5', 'p', 4, 'Before'
     saf, caf, maf, zaf, laf = 0.2, 'c', 'p', 6, 'After'
@@ -205,14 +210,14 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
     fig.savefig(pngfile)
     plt.close()
 
-    return 
+    return
 
 
 #%%
 def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
     """
     Plot network of interferometric pairs.
-    
+
     bperp can be dummy (-1~1).
     Suffix of pngfile can be png, ps, pdf, or svg.
     plot_bad
@@ -229,16 +234,16 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
     imdates = tools_lib.ifgdates2imdates(ifgdates)
     n_im = len(imdates)
     imdates_dt = np.array(([dt.datetime.strptime(imd, '%Y%m%d') for imd in imdates])) ##datetime
-    
-    ### Identify gaps    
+
+    ### Identify gaps
     G = inv_lib.make_sb_matrix(ifgdates)
     ixs_inc_gap = np.where(G.sum(axis=0)==0)[0]
-    
+
     ### Plot fig
     figsize_x = np.round(((imdates_dt_all[-1]-imdates_dt_all[0]).days)/80)+2
     fig = plt.figure(figsize=(figsize_x, 6))
     ax = fig.add_axes([0.06, 0.12, 0.92,0.85])
-    
+
     ### IFG blue lines
     for i, ifgd in enumerate(ifgdates):
         ix_m = imdates_all.index(ifgd[:8])
@@ -272,8 +277,8 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
             gap_dates_dt.append(imdates_dt[ix_gap]+ddays_td/2)
         plt.vlines(gap_dates_dt, 0, 1, transform=ax.get_xaxis_transform(),
                    zorder=1, label='Gap', alpha=0.6, colors='k', linewidth=3)
-        
-    ### Locater        
+
+    ### Locater
     loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
     try:  # Only support from Matplotlib 3.1
         ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
@@ -297,11 +302,9 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
         plt.ylabel('dummy')
     else:
         plt.ylabel('Bperp [m]')
-    
+
     plt.legend()
 
     ### Save
     plt.savefig(pngfile)
     plt.close()
-
-
