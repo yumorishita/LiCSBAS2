@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.3.3 20210910 Yu Morishita, GSI
+v1.3.4 20230302 Yu Morishita
 
 ========
 Overview
@@ -11,7 +11,7 @@ This script calculates velocity and its standard deviation from cum*.h5 and outp
 Usage
 =====
 LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x2/y1:y2]
-    [--ref_geo lon1/lon2/lat1/lat2] [--vstd] [--sin] [--mask maskfile] [--png]
+    [--ref_geo lon1/lon2/lat1/lat2] [--vstd] [--sin] [--nomask] [--png]
 
  -s  Start date of period to calculate velocity (Default: first date)
  -e  End date of period to calculate velocity (Default: last date)
@@ -24,12 +24,14 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x
  --vstd  Calculate vstd (Default: No)
  --sin   Add sin (annual) funcsion to linear model (Default: No)
          *.amp and *.dt (time difference wrt Jan 1) are output
- --mask  Path to mask file for ref phase calculation (Default: No mask)
+ --nomask   Does not apply mask.
  --png   Make png file (Default: Not make png)
 
 """
 #%% Change log
 '''
+v1.3.4 20230302 Yu Morishita
+ - Change mask option
 v1.3.3 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.3.2 20210125 Yu Morishita, GSI
@@ -86,7 +88,7 @@ def main(argv=None):
     outfile = []
     refarea = []
     refarea_geo = []
-    maskfile = []
+    maskflag = True
     vstdflag = False
     sinflag = False
     pngflag = False
@@ -99,7 +101,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "png", "ref_geo=", "nomask"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -122,8 +124,8 @@ def main(argv=None):
                 vstdflag = True
             elif o == '--sin':
                 sinflag = True
-            elif o == '--mask':
-                maskfile = a
+            elif o == '--nomask':
+                maskflag = False
             elif o == '--png':
                 pngflag = True
 
@@ -176,11 +178,11 @@ def main(argv=None):
         imd_e = imdates[-1]
 
     ### mask
-    if maskfile:
-        mask = io_lib.read_img(maskfile, length, width)
+    if maskflag:
+        mask = cumh5['mask'][()]
         mask[mask==0] = np.nan
         suffix_mask = '.mskd'
-    else:
+    else: # nomask
         mask = np.ones((length, width), dtype=np.float32)
         suffix_mask = ''
 

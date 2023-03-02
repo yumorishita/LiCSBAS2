@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.2.2 20210910 Yu Morishita, GSI
+v1.2.3 20230302 Yu Morishita
 
 ========
 Overview
@@ -11,7 +11,7 @@ This script outputs a float32 file of cumulative displacement from cum*.h5.
 Usage
 =====
 LiCSBAS_cum2flt.py -d yyyymmdd [-i infile] [-o outfile] [-m yyyymmdd] [-r x1:x2/y1:y2]
-     [--ref_geo lon1/lon2/lat1/lat2] [--mask maskfile] [--png]
+     [--ref_geo lon1/lon2/lat1/lat2] [--nomask] [--png]
 
  -d  Date to be output
  -i  Path to input cum file (Default: cum_filt.h5)
@@ -21,12 +21,14 @@ LiCSBAS_cum2flt.py -d yyyymmdd [-i infile] [-o outfile] [-m yyyymmdd] [-r x1:x2/
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ref_geo  Reference area in geographical coordinates.
- --mask  Path to mask file for ref phase calculation (Default: No mask)
+ --nomask   Does not apply mask
  --png   Make png file (Default: Not make png)
 
 """
 #%% Change log
 '''
+v1.2.3 20230302 Yu Morishita
+ - Change mask option
 v1.2.2 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.2.1 20210107 Yu Morishita, GSI
@@ -66,7 +68,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.2.2"; date=20210910; author="Y. Morishita"
+    ver="1.2.3"; date=20230302; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -78,7 +80,7 @@ def main(argv=None):
     imd_m = []
     refarea = []
     refarea_geo = []
-    maskfile = []
+    maskflag = True
     pngflag = False
     cmap = SCM.roma.reversed()
 
@@ -86,7 +88,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:i:o:m:r:", ["help", "png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hd:i:o:m:r:", ["help", "png", "ref_geo=", "nomask"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -105,8 +107,8 @@ def main(argv=None):
                 refarea = a
             elif o == '--ref_geo':
                 refarea_geo = a
-            elif o == '--mask':
-                maskfile = a
+            elif o == '--nomask':
+                maskflag = False
             elif o == '--png':
                 pngflag = True
 
@@ -157,10 +159,10 @@ def main(argv=None):
         imd_m = imdates[0]
 
     ### mask
-    if maskfile:
-        mask = io_lib.read_img(maskfile, length, width)
+    if maskflag:
+        mask = cumh5['mask'][()]
         mask[mask==0] = np.nan
-    else:
+    else: # nomask
         mask = np.ones((length, width), dtype=np.float32)
 
     ### Check date
