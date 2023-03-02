@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.2.1 20210910 Yu Morishita, GSI
+v1.2.2 20230302 Yu Morishita
 
 ========
 Overview
@@ -11,7 +11,7 @@ This script outputs a txt file of time series of displacement at a specified poi
 Usage
 =====
 LiCSBAS_cum2tstxt.py [-p x/y] [-g lon/lat] [-i cumfile] [-o tsfile] [-r x1:x2/y1:y2]
-    [--ref_geo lon1/lon2/lat1/lat2] [--mask maskfile]
+    [--ref_geo lon1/lon2/lat1/lat2] [--nomask]
 
  -p  x/y coordinate of a point to be output (index range 0 to width-1)
  -g  Lon/Lat of a point to be output
@@ -21,13 +21,15 @@ LiCSBAS_cum2tstxt.py [-p x/y] [-g lon/lat] [-i cumfile] [-o tsfile] [-r x1:x2/y1
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ref_geo  Reference area in geographical coordinates.
- --mask  Path to mask file for ref calculation (Default: No mask)
+ --nomask   Does not apply mask
 
  Note: either -p or -g must be specified.
 
 """
 #%% Change log
 '''
+v1.2.2 20230302 Yu Morishita
+ - Change mask option
 v1.2.1 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.2 20200703 Yu Morishita, Uni of Leeds and GSI
@@ -63,7 +65,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.2.1"; date=20210910; author="Y. Morishita"
+    ver="1.2.2"; date=20230302; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -75,13 +77,13 @@ def main(argv=None):
     tsfile = []
     refarea = []
     refarea_geo = []
-    maskfile = []
+    maskflag = True
 
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hp:g:i:o:r:", ["help", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hp:g:i:o:r:", ["help", "ref_geo=", "nomask"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -100,8 +102,8 @@ def main(argv=None):
                 refarea = a
             elif o == '--ref_geo':
                 refarea_geo = a
-            elif o == '--mask':
-                maskfile = a
+            elif o == '--nomask':
+                maskflag = False
 
         if not xy_str and not lonlat_str:
             raise Usage('No point location given, use either -p or -g!')
@@ -223,10 +225,10 @@ def main(argv=None):
     gap1 = gap[:, y, x]
 
     ### mask
-    if maskfile:
-        mask = io_lib.read_img(maskfile, length, width)
+    if maskflag:
+        mask = cumh5['mask'][()]
         mask[mask==0] = np.nan
-    else:
+    else: # nomask
         mask = np.ones((length, width), dtype=np.float32)
 
     #%% Read cum data

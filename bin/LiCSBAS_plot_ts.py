@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.13.4 20210910 Yu Morishita, GSI
+v1.14.0 20230219 Yu Morishita
 
 ========
 Overview
@@ -14,14 +14,12 @@ area can also be changed by right dragging.
 Inputs
 ===============
  - cum_filt.h5 and/or cum.h5
-[- mask, coh_avg, n_unw, vstd, n_gap, n_ifg_noloop, n_loop_err, resid_rms,
-   maxTlen, stc, scl.mli, hgt in results dir]
 
 =====
 Usage
 =====
-LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_dir]
-    [-u U.geo] [-r x1:x2/y1:y2] [--ref_geo lon1/lon2/lat1/lat2] [-p x/y]
+LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd]
+    [-r x1:x2/y1:y2] [--ref_geo lon1/lon2/lat1/lat2] [-p x/y]
     [--p_geo lon/lat] [-c cmap] [--nomask] [--vmin float] [--vmax float]
     [--auto_crange float] [--dmin float] [--dmax float] [--ylen float]
     [--ts_png pngfile]
@@ -30,9 +28,6 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
  --i2  Input 2nd cum hdf5 file
        (Default: cum.h5 if -i cum_filt.h5, otherwise none)
  -m    Refereference (master) date for time series (Default: first date)
- -d    Directory containing noise indices (e.g., mask, coh_avg, etc.)
-       (Default: "results" at the same dir as cum[_filt].h5)
- -u    Input U.geo file to show incidence angle (Default: ../GEOCml*/U.geo)
  -r    Initial reference area (Default: same as info/*ref.txt)
        0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ref_geo   Initial reference area in geographical coordinates.
@@ -53,6 +48,8 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
 """
 #%% Change log
 '''
+v1.14.0 20210910 Yu Morishita
+ - Don't read results_dir'
 v1.13.4 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.13.3 20210205 Yu Morishita, GSI
@@ -114,7 +111,6 @@ import datetime as dt
 import statsmodels.api as sm
 import SCM
 import warnings
-import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 
 os.environ['LANG'] = 'en_US.UTF-8'
@@ -172,15 +168,13 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.13.4"; date=20210910; author="Y. Morishita"
+    ver="1.14.0"; date=20230219; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
     #%% Set default
     cumfile = []
     cumfile2 = []
-    resultsdir = []
-    LOSufile = []
     mdate = []
     refarea = []
     refarea_geo = []
@@ -199,7 +193,7 @@ if __name__ == "__main__":
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
+            opts, args = getopt.getopt(argv[1:], "hi:d:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
                 "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png="])
         except getopt.error as msg:
@@ -216,8 +210,6 @@ if __name__ == "__main__":
                 mdate = a
             elif o == '-d':
                 resultsdir = a
-            elif o == '-u':
-                LOSufile = a
             elif o == '-r':
                 refarea = a
             elif o == '--ref_geo':
@@ -281,41 +273,6 @@ if __name__ == "__main__":
     if cumfile2 and not os.path.exists(cumfile2):
         print('\nNo {} found. Not use.'.format(cumfile2))
         cumfile2 = []
-
-    ### results dir
-    if not resultsdir: # if not given
-        resultsdir = os.path.join(cumdir, 'results')
-
-    ### mask
-    maskfile = os.path.join(resultsdir, 'mask')
-    if not os.path.exists(maskfile):
-        print('\nNo mask file found. Not use.')
-        maskflag = False
-        maskfile = []
-
-    ### Noise indecis
-    coh_avgfile = os.path.join(resultsdir, 'coh_avg')
-    n_unwfile = os.path.join(resultsdir, 'n_unw')
-    vstdfile = os.path.join(resultsdir, 'vstd')
-    n_gapfile = os.path.join(resultsdir, 'n_gap')
-    n_ifg_noloopfile = os.path.join(resultsdir, 'n_ifg_noloop')
-    n_loop_errfile = os.path.join(resultsdir, 'n_loop_err')
-    residfile = os.path.join(resultsdir, 'resid_rms')
-    maxTlenfile = os.path.join(resultsdir, 'maxTlen')
-    stcfile = os.path.join(resultsdir, 'stc')
-    mlifile = os.path.join(resultsdir, 'slc.mli')
-    hgtfile = os.path.join(resultsdir, 'hgt')
-
-
-    ### U.geo
-    if not LOSufile: #if not given
-        LOSufile = os.path.join(os.path.dirname(cumdir),
-           os.path.basename(cumdir).replace('TS_', ''), 'U.geo') ## Default
-    if not os.path.exists(LOSufile):
-        print('\nNo U.geo file found. Not use.')
-        LOSuflag = False
-    else:
-        LOSuflag = True
 
 
     #%% Read data
@@ -447,8 +404,8 @@ if __name__ == "__main__":
     mask_base[np.isnan(cum[ix_m, :, :])] = np.nan
 
     if maskflag:
-        print('Reading {} as mask'.format(os.path.relpath(maskfile)))
-        mask_vel = io_lib.read_img(maskfile, length, width)
+        print('Reading mask')
+        mask_vel = cumh5['mask'][()]
 
         mask_vel[mask_vel==0] = np.nan ## 0->nan
         mask = mask_vel
@@ -456,30 +413,25 @@ if __name__ == "__main__":
         mask = mask_base
 
 
-    #%% Read U.geo file
-    if LOSuflag:
-        print('Reading {}'.format(os.path.relpath(LOSufile)))
-        LOSu = io_lib.read_img(LOSufile, length, width)
-        inc_agl_deg = np.rad2deg(np.arccos(LOSu))
+    #%% Read LOSu
+    LOSu = cumh5['U.geo']
+    inc_agl_deg = np.rad2deg(np.arccos(LOSu))
 
 
     #%% Read noise indecies
     mapdict_data = {}
     mapdict_unit = {}
     names = ['mask', 'coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc',
-             'n_ifg_noloop', 'n_loop_err', 'resid', 'mli', 'hgt']
+             'n_ifg_noloop', 'n_loop_err', 'resid_rms', 'slc.mli', 'hgt']
     units = ['', '', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm', 'log10', 'm']
-    files = [maskfile, coh_avgfile, n_unwfile, vstdfile, maxTlenfile, n_gapfile,
-             stcfile, n_ifg_noloopfile, n_loop_errfile, residfile, mlifile, hgtfile]
-#    for name, file in zip(names, files):
     for i, name in enumerate(names):
         try:
-            data = io_lib.read_img(files[i], length, width)
+            data = cumh5[name]
             mapdict_data[name] = data
             mapdict_unit[name] = units[i]
-            print('Reading {}'.format(os.path.basename(files[i])))
+            print(f'Reading {name}')
         except:
-            print('No {} found, not use.'.format(files[i]))
+            print(f'No {name} found, not use.')
 
 
     #%% Calc time in datetime and ordinal
@@ -801,9 +753,8 @@ if __name__ == "__main__":
             else:
                 noisetxt = noisetxt+'{}: {:.2f} {}\n'.format(key, val, unit)
 
-        if LOSuflag:
-            noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
-            noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
+        noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
+        noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
 
         ### Get lat lon and show Ref info at side
         if geocod_flag:
