@@ -287,11 +287,11 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
         for label in ax.get_xticklabels():
             label.set_rotation(20)
             label.set_horizontalalignment('right')
-    ax.grid(b=True, which='major')
+    ax.grid(which='major')
 
     ### Add bold line every 1yr
     ax.xaxis.set_minor_locator(mdates.YearLocator())
-    ax.grid(b=True, which='minor', linewidth=2)
+    ax.grid(which='minor', linewidth=2)
 
     ax.set_xlim((imdates_dt_all[0]-dt.timedelta(days=10),
                  imdates_dt_all[-1]+dt.timedelta(days=10)))
