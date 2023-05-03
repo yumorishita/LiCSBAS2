@@ -172,7 +172,7 @@ def main(argv=None):
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
-    bool_mask = np.zeros((length, width), dtype=np.bool)
+    bool_mask = np.zeros((length, width), dtype=bool)
 
 
     #%% Check and set pixels to be masked based on coherence
