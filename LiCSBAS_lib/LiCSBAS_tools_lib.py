@@ -135,6 +135,7 @@ def cm_insar():
         rgb_ma[:, i] = np.convolve(rgb_ex[:, i], np.ones(ma_size)/ma_size, 'valid')
 
     rgbs = rgb_ma
+    rgbs[rgbs>1] = 1 # values should be within 0-1 range
 
     return LSC.from_list('cm_insar', rgbs)
 
