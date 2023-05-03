@@ -232,7 +232,7 @@ def main(argv=None):
             n_data_fromW = n_data_fromW + ~np.isnan(data_list[i])
 
     n_data_total = n_data_fromE + n_data_fromW
-    bool_valid = np.bool8(n_data_fromE) & np.bool8(n_data_fromW)
+    bool_valid = np.bool_(n_data_fromE) & np.bool_(n_data_fromW)
 
     print('\nNumber of valid pixels: {}'.format(bool_valid.sum()))
 
