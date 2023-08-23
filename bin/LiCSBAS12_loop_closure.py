@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.6.1 20210405 Yu Morishita, GSI
+v1.6.2 20230822 Yu Morishita
 
 ========
 Overview
@@ -53,18 +53,21 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
- [--rm_ifg_list file] [--n_para int]
+ [--rm_ifg_list file] [--rm_noloop_ifg] [--n_para int]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
  -l  Threshold of RMS of loop phase (Default: 1.5 rad)
  --multi_prime  Multi Prime mode (take into account bias in loop)
  --rm_ifg_list  Manually remove ifgs listed in a file
+ --rm_noloop_ifg  Remove ifgs with no loop
  --n_para  Number of parallel processing (Default: # of usable CPU)
 
 """
 #%% Change log
 '''
+v1.6.2 20230822 Yu Morishita
+ - Add --rm_noloop_ifg option
 v1.6.1 20210405 Yu Morishita, GSI
  - Bug fix when all pixels are nan in loop phase
 v1.6 20210311 Yu Morishita, GSI
@@ -125,7 +128,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.1"; date=20210405; author="Y. Morishita"
+    ver="1.6.2"; date=20230822; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -138,6 +141,7 @@ def main(argv=None):
     loop_thre = 1.5
     multi_prime = False
     rm_ifg_list = []
+    rm_noloop_ifg = False
 
     try:
         n_para = len(os.sched_getaffinity(0))
@@ -154,8 +158,8 @@ def main(argv=None):
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hd:t:l:",
-                                       ["help", "multi_prime",
-                                        "rm_ifg_list=", "n_para="])
+                                       ["help", "multi_prime", "rm_ifg_list=",
+                                        "rm_noloop_ifg", "n_para="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -172,6 +176,8 @@ def main(argv=None):
                 multi_prime = True
             elif o == '--rm_ifg_list':
                 rm_ifg_list = a
+            elif o == '--rm_noloop_ifg':
+                rm_noloop_ifg = True
             elif o == '--n_para':
                 n_para = int(a)
 
@@ -339,6 +345,10 @@ def main(argv=None):
     else:
         rm_ifg = []
         bad_ifg = bad_ifg1
+
+    ### Drop no_loop_ifg if rm_noloop_ifg
+    if rm_noloop_ifg:
+        bad_ifg = list(set(bad_ifg+no_loop_ifg))
 
     ### Compute n_unw without bad_ifg11 and bad_ifg
     n_unw = np.zeros((length, width), dtype=np.int16)
