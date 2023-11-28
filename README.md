@@ -24,6 +24,8 @@ Morishita, Y.: Nationwide urban ground deformation monitoring in Japan using Sen
 
 Lazecký, M.; Spaans, K.; González, P.J.; Maghsoudi, Y.; Morishita, Y.; Albino, F.; Elliott, J.; Greenall, N.; Hatton, E.; Hooper, A.; Juncu, D.; McDougall, A.; Walters, R.J.; Watson, C.S.; Weiss, J.R.; Wright, T.J. LiCSAR: An Automatic InSAR Tool for Measuring and Monitoring Tectonic and Volcanic Activity. *Remote Sens.* **2020**, *12*, 2430, https://doi.org/10.3390/rs12152430.
 
+Morishita, Y., Sugimoto, R., Nakamura, R. et al. Nationwide urban ground deformation in Japan for 15 years detected by ALOS and Sentinel-1. Prog Earth Planet Sci 10, 66 (2023). https://doi.org/10.1186/s40645-023-00597-5
+
 ## Acknowledgements
 
 This work has been accomplished during Y. Morishita’s visit to the University of Leeds, funded by JSPS Overseas Research Fellowship.
