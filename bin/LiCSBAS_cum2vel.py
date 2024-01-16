@@ -30,6 +30,8 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x
 """
 #%% Change log
 '''
+v1.3.5 20240116 Yu Morishita
+ - Fix bug with cmap_dt
 v1.3.4 20230302 Yu Morishita
  - Change mask option
 v1.3.3 20210910 Yu Morishita, GSI
@@ -77,7 +79,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.3"; date=20210910; author="Y. Morishita"
+    ver="1.3.5"; date=20240116; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -95,7 +97,7 @@ def main(argv=None):
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_amp = 'viridis_r'
-    cmap_wrap = tools_lib.get_cmap('cm_insar')
+    cmap_dt = tools_lib.get_cmap('cm_insar')
 
 
     #%% Read options
