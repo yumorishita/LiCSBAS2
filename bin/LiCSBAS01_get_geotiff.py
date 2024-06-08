@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.6.4 20230215 Yu Morishita
+v1.6.5 20240607 Yu Morishita
 
 ========
 Overview
@@ -38,6 +38,8 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
 """
 #%% Change log
 '''
+v1.6.5 20240607 Yu Morishita
+ - Fix bug with requests folder url
 v1.6.4 20230215 Yu Morishita
  - Update LiCSARweb URL
 v1.6.3 20201207 Yu Morishita, GSI
@@ -94,7 +96,7 @@ def main(argv=None):
         argv = sys.argv
         
     start = time.time()
-    ver='1.6.4'; date=20230215; author="Y. Morishita"
+    ver='1.6.5'; date=20240607; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
