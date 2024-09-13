@@ -211,7 +211,7 @@ def main(argv=None):
     else:
         ### Get available dates
         print('Searching latest epoch for mli...', flush=True)
-        url = os.path.join(LiCSARweb, trackID, frameID, 'epochs', '')
+        url = os.path.join(LiCSARweb, trackID, frameID, 'epochs/')
         response = requests.get(url)
         
         response.encoding = response.apparent_encoding #avoid garble
@@ -227,7 +227,8 @@ def main(argv=None):
         for i, imd in enumerate(reversed(_imdates)):
             if np.mod(i, 10) == 0:
                 print("\r  {0:3}/{1:3}".format(i, len(_imdates)), end='', flush=True)
-            url_epoch = os.path.join(url, imd, '')
+            imd_mod = imd + "/"
+            url_epoch = os.path.join(url, imd_mod)
             response = requests.get(url_epoch)
             response.encoding = response.apparent_encoding #avoid garble
             html_doc = response.text
@@ -256,7 +257,7 @@ def main(argv=None):
 
         ### Get available dates
         print('\nDownload GACOS data', flush=True)
-        url = os.path.join(LiCSARweb, trackID, frameID, 'epochs', '')
+        url = os.path.join(LiCSARweb, trackID, frameID, 'epochs/')
         response = requests.get(url)
         response.encoding = response.apparent_encoding #avoid garble
         html_doc = response.text
@@ -320,7 +321,7 @@ def main(argv=None):
     #%% unw and cc
     ### Get available dates
     print('\nDownload geotiff of unw and cc', flush=True)
-    url_ifgdir = os.path.join(LiCSARweb, trackID, frameID, 'interferograms', '')
+    url_ifgdir = os.path.join(LiCSARweb, trackID, frameID, 'interferograms/')
     response = requests.get(url_ifgdir)
     
     response.encoding = response.apparent_encoding #avoid garble
