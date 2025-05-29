@@ -312,7 +312,12 @@ def mask_wrapper(ifgix):
 
     if not os.path.exists(os.path.join(out_dir1, ifgd+'.cc')):
         ccfile = os.path.join(in_dir, ifgd, ifgd+'.cc')
-        os.symlink(os.path.relpath(ccfile, out_dir1), os.path.join(out_dir1, ifgd+'.cc'))
+        try:
+            os.symlink(os.path.relpath(ccfile, out_dir1),
+                       os.path.join(out_dir1, ifgd+'.cc'))
+        except:
+            shutil.copy(ccfile, out_dir1)
+        
 
     ## Output png for masked unw
     pngfile = os.path.join(out_dir1, ifgd+'.unw.png')

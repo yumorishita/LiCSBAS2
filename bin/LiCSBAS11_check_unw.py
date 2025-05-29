@@ -280,9 +280,17 @@ def main(argv=None):
             bad_ifgdates.append(ifgdates[i])
             ixs_bad_ifgdates.append(i)
             rm_flag = '*'
-            os.symlink(os.path.relpath(rasorg, bad_ifg_rasdir), os.path.join(bad_ifg_rasdir, rasname))
+            try:
+                os.symlink(os.path.relpath(rasorg, bad_ifg_rasdir),
+                           os.path.join(bad_ifg_rasdir, rasname))
+            except:
+                shutil.copy(rasorg, bad_ifg_rasdir)
         else:
-            os.symlink(os.path.relpath(rasorg, ifg_rasdir), os.path.join(ifg_rasdir, rasname))
+            try:               
+                os.symlink(os.path.relpath(rasorg, ifg_rasdir),
+                           os.path.join(ifg_rasdir, rasname))
+            except:
+                shutil.copy(rasorg, ifg_rasdir)                
             rm_flag = ''
 
         ### For stats file
