@@ -439,7 +439,11 @@ def convert_wrapper(ix_im):
         if os.path.exists(hdrfile): os.remove(hdrfile)
         if os.path.exists(bilfile): os.remove(bilfile)
         make_hdr(ztdfile+'.rsc', hdrfile)
-        os.symlink(os.path.relpath(ztdfile, sltddir), bilfile)
+        
+        try:
+            os.symlink(os.path.relpath(ztdfile, sltddir), bilfile)
+        except:
+            shutil.copy(ztdfile, bilfile)
 
         ## Check read error with unkown cause
         if gdal.Info(bilfile) is None:
@@ -528,7 +532,12 @@ def correct_wrapper(i):
 
     ### Link cc
     if not os.path.exists(os.path.join(out_dir1, ifgd+'.cc')):
-        os.symlink(os.path.relpath(os.path.join(in_dir1, ifgd+'.cc'), out_dir1), os.path.join(out_dir1, ifgd+'.cc'))
+        try:
+            os.symlink(os.path.relpath(os.path.join(in_dir1, ifgd+'.cc'), out_dir1),
+                       os.path.join(out_dir1, ifgd+'.cc'))
+        except:
+            shutil.copy(os.path.join(in_dir1, ifgd+'.cc'), out_dir1)
+
 
     ### Output png for comparison
     data3 = [np.angle(np.exp(1j*(data/cycle))*cycle) for data in [unw, unw_cor, dsltd]]

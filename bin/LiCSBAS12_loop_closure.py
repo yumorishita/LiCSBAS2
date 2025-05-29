@@ -636,16 +636,26 @@ def main(argv=None):
         rasorg = os.path.join(ifgdir, ifgd, rasname)
         ### Bad ifgs
         if ifgd in bad_ifg_all:
-            os.symlink(os.path.relpath(rasorg, bad_ifgrasdir), os.path.join(bad_ifgrasdir, rasname))
+            dst_dir = bad_ifgrasdir
         ### Remaining bad ifg candidates
         elif ifgd in bad_ifg_cand_res:
-            os.symlink(os.path.relpath(rasorg, bad_ifg_candrasdir), os.path.join(bad_ifg_candrasdir, rasname))
+            dst_dir = bad_ifg_candrasdir
         ### Good ifgs
         else:
-            os.symlink(os.path.relpath(rasorg, ifg_rasdir), os.path.join(ifg_rasdir, rasname))
+            dst_dir = ifg_rasdir
+
+        try:
+            os.symlink(os.path.relpath(rasorg, dst_dir),
+                       os.path.join(dst_dir, rasname))
+        except:
+            shutil.copy(rasorg, dst_dir)
 
         if ifgd in no_loop_ifg:
-            os.symlink(os.path.relpath(rasorg, no_loop_ifgrasdir), os.path.join(no_loop_ifgrasdir, rasname))
+            try:
+                os.symlink(os.path.relpath(rasorg, no_loop_ifgrasdir),
+                           os.path.join(no_loop_ifgrasdir, rasname))
+            except:
+                shutil.copy(rasorg, no_loop_ifgrasdir)
 
 
     #%% Plot network
