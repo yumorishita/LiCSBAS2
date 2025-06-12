@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.1 20210226 Yu Morishita, GSI
-
-========
-Overview
-========
 This script draws contours from a GeoTIFF file and output a GeoJSON file (with GSI Maps style).
 
 =====
@@ -38,14 +33,6 @@ Note:
  - Rocommend reducing n_node to < 10000 by -q and -s options for GSIMaps.
 
 """
-#%% Change log
-'''
-v1.1 20210226 Yu Morishita, GSI
- - Add -s option
- - Change default color
-v1.0 20200408 Yu Morishita, GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

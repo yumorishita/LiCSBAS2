@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.4 20210205 Yu Morishita, GSI
-
-========
-Overview
-========
 This script creates a colored GeoTIFF from a data GeoTIFF.
 
 =====
@@ -33,20 +28,6 @@ LiCSBAS_color_geotiff.py -i infile [-c cmap] [-o outfile] [--cmin float] [--cmax
  --no_colorbar   Do not create colorbar image (name: cmap_cmin_cmax.pdf)
 
 """
-#%% Change log
-'''
-v1.4 20210205 Yu Morishita, GSI
- - More cmap available
-v1.3 20200904 Yu Morishita, GSI
- - Avoid segmentation fault
-v1.2 20200827 Yu Morishita, GSI
- - Update for matplotlib >= 3.3
-v1.1 20200703 Yu Morishita, GSI
- - Bug fix for using SCM without _r
-v1.0 20200409 Yu Morishita, GSI
- - Original implementationf
-'''
-
 
 #%% Import
 import getopt

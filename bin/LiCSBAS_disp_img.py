@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.11.0 20210205 Yu Morishita, GSI
-
 This script displays an image file.
 
 =====
@@ -39,45 +37,6 @@ LiCSBAS_disp_img.py -i image_file -p par_file [-c cmap] [--cmin float]
  --kmz          Save kmz (need EQA.dem_par for -p option)
 
 """
-
-
-#%% Change log
-'''
-v1.11 20210205 Yu Morishita, GSI
- - More cmap available
- - Show colorbar for cyclic cmaps
-v1.10 20210120 Yu Morishita, GSI
- - Add --n_color option
- - Bug fix in creating kmz with standard cmap
-v1.9.1 20210108 Yu Morishita, GSI
- - Simultaneously usable png and kmz
-v1.9 20201111 Yu Morishita, GSI
- - Data GeoTIFF or NetCDF available
-v1.8.1 20200916 Yu Morishita, GSI
- - Small bug fix to display uint8
-v1.8 20200902 Yu Morishita, GSI
- - Always use nearest interpolation to avoid expanded nan
-v1.7 20200828 Yu Morishita, GSI
- - Update for matplotlib >= 3.3
- - Use nearest interpolation for cyclic cmap to avoid aliasing
-v1.6 20200814 Yu Morishita, GSI
- - Set 0 as nodata by default
-v1.5 20200317 Yu Morishita, Uni of Leeds and GSI
- - Add offscreen when kmz or png for working with bsub on Jasmin
- - Add name and description (cbar) tag in kmz
-v1.4 20200225 Yu Morishita, Uni of Leeds and GSI
- - Use SCM instead of SCM5
- - Support uint8
-v1.3 20200212 Yu Morishita, Uni of Leeds and GSI
- - Not display image with --kmz option
-v1.2 20191025 Yu Morishita, Uni of Leeds and GSI
- - Add --kmz option
-v1.1 20190828 Yu Morishita, Uni of Leeds and GSI
- - Add --png option
-v1.0 20190729 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
-
 
 #%% Import
 import getopt

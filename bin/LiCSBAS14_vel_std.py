@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.2 20210309 Yu Morishita, Uni of Leeds and GSI
-
-========
-Overview
-========
 This script calculates the standard deviation of the velocity by the bootstrap method and STC (spatio-temporal consistency; Hanssen et al., 2008).
 
 ===============
@@ -27,15 +22,6 @@ LiCSBAS14_vel_std.py -t tsadir [--mem_size float] [--gpu]
  --gpu        Use GPU (Need cupy module)
 
 """
-#%% Change log
-'''
-v1.2 20210309 Yu Morishita, GSI
- - Add GPU option
-v1.1 20190805 Yu Morishita, Uni of Leeds and GSI
- - Bag fix of stc calculation with overlapping
-v1.0 20190725 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

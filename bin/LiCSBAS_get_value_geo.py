@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.1 20191218 Yu Morishita, Uni of Leeds and GSI
-
-========
-Overview
-========
 This script gets values (and x/y coordinates) from a float32 file at specified points in geographical coordinates. Average values in a boxcar window are also output.
 
 =====
@@ -21,13 +16,6 @@ LiCSBAS_get_value_geo.py -i infile -p dempar -l locfile [-o outfile] [--win_size
  --bigendian  If input file is in big endian
 
 """
-#%% Change log
-'''
-v1.1 20191218 Yu Morishita, Uni of Leeds and GSI
- - Add win_size option
-v1.0 20190801 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

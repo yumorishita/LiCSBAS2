@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.2.2 20230302 Yu Morishita
-
-========
-Overview
-========
 This script outputs a txt file of time series of displacement at a specified point from cum*.h5.
 
 =====
@@ -26,19 +21,6 @@ LiCSBAS_cum2tstxt.py [-p x/y] [-g lon/lat] [-i cumfile] [-o tsfile] [-r x1:x2/y1
  Note: either -p or -g must be specified.
 
 """
-#%% Change log
-'''
-v1.2.2 20230302 Yu Morishita
- - Change mask option
-v1.2.1 20210910 Yu Morishita, GSI
- - Avoid error for refarea in bytes
-v1.2 20200703 Yu Morishita, Uni of Leeds and GSI
- - Add --ref_geo option
-v1.1 20200227 Yu Morishita, Uni of Leeds and GSI
- - Add hgt_linear_flag
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

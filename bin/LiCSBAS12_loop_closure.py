@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.6.2 20230822 Yu Morishita
-
-========
-Overview
-========
 This script identifies bad unw by checking loop closure.
 A preliminary reference point that has all valid unw data and the smallest RMS
 of loop phases is also determined.
@@ -64,38 +59,6 @@ LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
  --n_para  Number of parallel processing (Default: # of usable CPU)
 
 """
-#%% Change log
-'''
-v1.6.2 20230822 Yu Morishita
- - Add --rm_noloop_ifg option
-v1.6.1 20210405 Yu Morishita, GSI
- - Bug fix when all pixels are nan in loop phase
-v1.6 20210311 Yu Morishita, GSI
- - Add --rm_ifg_list option
-v1.5.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.5.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.5.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.5 20201016 Yu Morishita, GSI
- - Bug fix in identifying bad_ifg_cand2
-v1.4 20201007 Yu Morishita, GSI
- - Add --multi_prime option
- - Parallel processing in 2-4th loop
-v1.3 20200907 Yu Morishita, GSI
- - Parallel processing in 1st loop
-v1.2 20200228 Yu Morishita, Uni of Leeds and GSI
- - Not output network pdf
- - Improve bad loop cand identification
- - Change color of png
- - Deal with cc file in uint8 format
- - Change ref.txt name
-v1.1 20191106 Yu Morishita, Uni of Leeds and GSI
- - Add iteration during ref search when no ref found
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt
@@ -128,7 +91,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.2"; date=20230822; author="Y. Morishita"
+    ver="1.6.3"; date=20250529; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 

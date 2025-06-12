@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.5.2 20210311 Yu Morishita, GSI
-
 This script inverts the SB network of unw to obtain the time series and
 velocity using NSBAS (López-Quiroz et al., 2009; Doin et al., 2011) approach.
 A stable reference point is determined after the inversion. RMS of the time
@@ -77,50 +75,6 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --gpu        Use GPU (Need cupy module)
 
 """
-#%% Change log
-'''
-v1.5.2 20210311 Yu Morishita, GSI
- - Include noise indices and LOS unit vector in cum.h5 file
-v1.5.1 20210309 Yu Morishita, GSI
- - Change default --mem_size to 8000
- - Speed up by reading cum data on memory
-v1.5 20210305 Yu Morishita, GSI
- - Add GPU option
- - Speed up by activating n_para_inv and OMP_NUM_THREADS=1
-v1.4.8 20210127 Yu Morishita, GSI
- - Automatically reduce mem_size if available RAM is small
-v1.4.7 20201124 Yu Morishita, GSI
- - Comporess hdf5 file
-v1.4.6 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.4.5 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.4.4 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.4.3 20201104 Yu Morishita, GSI
- - Bug fix when n_pt_unnan=0 in a patch
-v1.4.2 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.4.1 20200925 Yu Morishita, GSI
- - Small bug fix in n_para
-v1.4 20200909 Yu Morishita, GSI
- - n_core -> n_para
- - Parallelize making png
-v1.3 20200902 Yu Morishita, GSI
- - Parallelize calculation of n_gap and n_ifg_noloop
- - Change n_core default to # of usable CPU
- - Fix n_core_inv=1 for inversion because it already uses multicore
-v1.2 20200225 Yu Morishita, Uni of Leeds and GSI
- - Not output network pdf
- - Change color of png
- - Change name of parameters.txt to 13parameters.txt
- - Deal with cc file in uint8 format
- - Automatically find stable reference point
-v1.1 20190829 Yu Morishita, Uni of Leeds and GSI
- - Remove cum.h5 if exists before creation
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.14.0 20230219 Yu Morishita
-
-========
-Overview
-========
 This script displays the velocity, cumulative displacement, and noise indices,
 and plots the time series of displacement. You can interactively change the
 displayed image/area and select a point for the time series plot. The reference
@@ -46,55 +41,6 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd]
  --ts_png     Output png file of time series plot (not display interactive viewers)
 
 """
-#%% Change log
-'''
-v1.14.0 20210910 Yu Morishita
- - Don't read results_dir'
-v1.13.4 20210910 Yu Morishita, GSI
- - Avoid error for refarea in bytes
-v1.13.3 20210205 Yu Morishita, GSI
- - More cmap available
-v1.13.2 20210126 Yu Morishita, GSI
- - Small bug fix in -r and noise indices
- - Change initial point to center of ref area
-v1.13.1 20201016 Yu Morishita, GSI
- - Use log10 to display mli
-v1.13 20200902 Yu Morishita, GSI
- - Use nearest interpolation to avoid expanded nan
-v1.12 20200827 Yu Morishita, GSI
- - Bug fix for new matplotlib (>=3.3); shift epoch and use datetime instead of ordinal
-   (https://matplotlib.org/3.3.1/api/dates_api.html)
-v1.11 20200707 Yu Morishita, GSI
- - Add --ts_png option
-v1.10 20200703 Yu Morishita, GSI
- - Add --ref_geo and --p_geo options
-v1.9 20200527 Yu Morishita, GSI
- - Add -u option to show incidence angle
-v1.8 20200408 Yu Morishita, GSI
- - Avoid garbled characters in ja_JP environment
-v1.7 20200227 Yu Morishita, Uni of Leeds and GSI
- - Use SCM instead of SCM5
- - Change option from --cmap to -c
- - Add initial point selection option for time series plot
- - Read hgt_linear flag
-v1.6 20200210 Yu Morishita, Uni of Leeds and GSI
- - Adjust figure size and ax location
-v1.5 20200203 Yu Morishita, Uni of Leeds and GSI
- - Immediate update of image and ts plot when change ref or mask
-v1.4 20191213 Yu Morishita, Uni of Leeds and GSI
- - Bag fix for deramp_flag
-v1.3 20191120 Yu Morishita, Uni of Leeds and GSI
- - Add mark of selected point and set aspect in image window
- - Display values and unit of noise indices in time seires window
-v1.2 20191115 Yu Morishita, Uni of Leeds and GSI
- - Add hgt
-v1.1 20190815 Yu Morishita, Uni of Leeds and GSI
- - Add -r option
- - Not use i2 if not exist
- - Bug fix about lines2
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Created, originating from GIAnT
-'''
 
 #%% Import
 import getopt

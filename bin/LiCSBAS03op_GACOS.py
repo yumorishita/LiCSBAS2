@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.5.5 20201119 Yu Morishita, GSI
-
 This script applies a tropospheric correction to unw data using GACOS data. GACOS data may be automatically downloaded from COMET-LiCS web at step01 (if available), or could be externally obtained by requesting on a GACOS web (http://www.gacos.net/).
 If you request the GACOS data through the GACOS web, the dates and time of interest can be found in baselines and slc.mli.par, respectively. These are also available on the COMET-LiCS web portal. Once the GACOS data are ready, download the tar.gz, uncompress it, and put into GACOS dir.
 Existing files are not re-created to save time, i.e., only the newly available data will be processed. The impact of the correction can be visually checked by showing GACOS_info.png and */*.gacos.png. This step is optional.
@@ -47,35 +45,6 @@ LiCSBAS03op_GACOS.py -i in_dir -o out_dir [-g gacosdir] [--fillhole] [--n_para i
  --n_para  Number of parallel processing (Default: # of usable CPU)
 
 """
-#%% Change log
-'''
-v1.5.5 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.5.4 20201119 Yu Morishita, GSI
- - New GACOS format (ztd.tif) available
-v1.5.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.5.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.5.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.5 20200909 Yu Morishita, GSI
- - Parallel processing
-v1.4 20200703 Yu Morioshita, GSI
- - Replace problematic terms
-v1.3 20200609 Yu Morishita, GSI
- - Avoid reading error of ztd (unkown cause) by addding subtle value
-v1.2 20200228 Yu Morishita, Uni of Leeds and GSI
- - Compatible with GACOS data provided from LiCSAR-portal
- - Output correlation plot
- - Output no_gacos_im.txt
- - Change option from -z (still available) to -g and set GACOS as default
-v1.1 20190812 Yu Morishita, Uni of Leeds and GSI
- - Add fillhole option
-v1.0 20190729 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
-
 
 #%% Import
 import getopt
@@ -161,7 +130,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.5"; date=20201119; author="Y. Morishita"
+    ver="1.5.6"; date=20250529; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 

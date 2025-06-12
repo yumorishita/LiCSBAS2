@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.8.1 20200911 Yu Morishita, GSI
-
-========
-Overview
-========
 This script makes a mask for time series using several noise indices. The pixel is masked if any of the values of the noise indices for a pixel is worse (larger or smaller) than a specified threshold.
 
 ===============
@@ -52,30 +47,6 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
    L-band : -c 0.01 -u 1   -v 200 -T 1 -g 1  -s 10 -i 50 -l 1 -r 10
  
 """
-#%% Change log
-'''
-v1.8.1 20200911 Yu Morishita, GSI
- - Change default to -i 50
-v1.8 20200902 Yu Morishita, GSI
- - Use nearest interpolation to avoid expanded nan
-v1.7 20200224 Yu Morishita, Uni of Leeds and GSI
- - Change color of mask_ts.png
- - Update about parameters.txt
-v1.6 20200124 Yu Morishita, Uni of Leeds and GSI
- - Increase default vstd threshold because vstd is not useful
-v1.5 20200123 Yu Morishita, Uni of Leeds and GSI
- - Change default n_gap threshold for L-band to 1
-v1.4 20200122 Yu Morishita, Uni of Leeds and GSI
- - Remove close fig which can cause error
-v1.3 20191128 Yu Morishita, Uni of Leeds and GSI
- - Add noautoadjust option
-v1.2 20190918 Yu Morishita, Uni of Leeds and GSI
- - Output mask_ts_mskd.png
-v1.1 20190906 Yu Morishita, Uni of Leeds and GSI
- - tight_layout and auto ajust of size for png
-v1.0 20190724 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

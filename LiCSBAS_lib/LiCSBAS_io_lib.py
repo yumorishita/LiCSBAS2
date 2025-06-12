@@ -1,26 +1,8 @@
 #!/usr/bin/env python3
 """
-========
-Overview
-========
 Python3 library of input/output functions for LiCSBAS.
 
-=========
-Change log
-=========
-v1.4 20210224 Yu Morioshita, GSI
- - Add read_geotiff
-v1.3 20210209 Yu Morioshita, GSI
- - Add make_geotiff
-v1.2.1 20201211 Yu Morioshita, GSI
- - Skip invalid lines in baselines file in read_bperp_file
-v1.2 20200703 Yu Morioshita, GSI
- - Replace problematic terms
-v1.1 20200227 Yu Morioshita, Uni of Leeds and GSI
- - Add hgt_linear_flag to make_tstxt
- - Add make_point_kml
-v1.0 20190730 Yu Morioshita, Uni of Leeds and GSI
- - Original implementation
+v1.4 20210224 Yu Morishita
 
 """
 import sys
