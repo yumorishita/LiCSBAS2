@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.0.4 20201118 Yu Morishita, GSI
-
-========
-Overview
-========
 This script generates directory with TMS tiles using gdal2tiles.py.
 https://gdal.org/programs/gdal2tiles.html
 
@@ -31,20 +26,6 @@ LiCSBAS_color_geotiff2tiles.py -i infile [-o outdir] [--zmin int] [--zmax int]
            Available only in gdal>=2.3
 
 """
-#%% Change log
-'''
-v1.0.4 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.0.3 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.0.2 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.0.1 20201016 Yu Morishita, GSI
- - Change default output name
-v1.0 20200924 Yu Morishita, GSI
- - Original implementation
-'''
-
 
 #%% Import
 import getopt

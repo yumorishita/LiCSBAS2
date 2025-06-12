@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
 """
-v1.1.2 20210323 Yu Morishita, GSI
+v1.1.2 20210323 Yu Morishita
 
 This script checks if LiCSBAS install is OK or not.
 
 """
-#%% Change log
-'''
-v1.1.2 20210323 Yu Morishita, GSI
- - Update how to import gdal
-v1.1.1 20210319 Yu Morishita, GSI
- - Add psutil
-v1.1 20201124 Yu Morishita, GSI
- - gdal must be >=2.4
-v1.0 20201009 Yu Morishita, GSI
- - Original implementation
-'''
-
 
 #%% Import
 from importlib import import_module

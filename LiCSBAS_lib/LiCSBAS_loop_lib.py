@@ -1,31 +1,8 @@
 #!/usr/bin/env python3
 """
-========
-Overview
-========
 Python3 library of loop closure check functions for LiCSBAS.
 
-=========
-Changelog
-=========
-v1.5.2 20210303 Yu Morishita, GSI
- - Use get_cmap in make_loop_png
- - Add colorbar in make_loop_png
-v1.5.1 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.5 20201006 Yu Morishita, GSI
- - Update make_loop_png
-v1.4 20200828 Yu Morishita, GSI
- - Update for matplotlib >= 3.3
- - Use nearest interpolation for insar cmap to avoid aliasing
-v1.3 20200703 Yu Morioshita, GSI
- - Replace problematic terms
-v1.2 20200224 Yu Morioshita, Uni of Leeds and GSI
- - Change color of loop phase
-v1.1 20190906 Yu Morioshita, Uni of Leeds and GSI
- - tight_layout for loop png
-v1.0 20190708 Yu Morioshita, Uni of Leeds and GSI
- - Original implementation
+v1.5.2 20210303 Yu Morishita
 """
 
 import os

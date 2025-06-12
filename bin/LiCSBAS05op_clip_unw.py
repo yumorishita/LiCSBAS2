@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.2.5 20210105 Yu Morishita, GSI
-
 This script clips a specified rectangular area of interest from unw and cc data. The clipping can make the data size smaller and processing faster, and improve the result of Step 1-2 (loop closure). Existing files are not re-created to save time, i.e., only the newly available data will be processed. This step is optional.
 
 ===============
@@ -37,26 +35,6 @@ LiCSBAS05op_clip_unw.py -i in_dir -o out_dir [-r x1:x2/y1:y2] [-g lon1/lon2/lat1
  --n_para  Number of parallel processing (Default: # of usable CPU)
 
 """
-#%% Change log
-'''
-v1.2.5 20210105 Yu Morishita, GSI
- - Fill 0 by nan in unw
-v1.2.4 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.2.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.2.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.2.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.2 20200909 Yu Morishita, GSI
- - Parallel processing
-v1.1 20200302 Yu Morishita, Uni of Leeds and GSI
- - Bag fix for hgt.png and glob
- - Deal with cc file in uint8 format
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

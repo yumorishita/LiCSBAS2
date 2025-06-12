@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.7.4 202011119 Yu Morishita, GSI
-
 This script converts GeoTIFF files of unw and cc to float32 and uint8 format, respectively, for further time series analysis, and also downsamples (multilooks) data if specified. Existing files are not re-created to save time, i.e., only the newly available data will be processed.
 
 ====================
@@ -43,40 +41,6 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
  --n_para  Number of parallel processing (Default: # of usable CPU)
 
 """
-#%% Change log
-'''
-v1.7.4 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.7.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.7.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.7.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.7 20201020 Yu Morishita, GSI
- - Remove -f option and not download tifs here
-v1.6.1 20201016 Yu Morishita, GSI
- - Deal with mli and hgt in other dtype
-v1.6 20201008 Yu Morishita, GSI
- - Add --freq option
-v1.5.1 20200916 Yu Morishita, GSI
- - Bug fix in handling cc float
-v1.5 20200909 Yu Morishita, GSI
- - Parallel processing
-v1.4 20200228 Yu Morishita, Uni of Leeds and GSI
- - Change format of output cc from float32 to uint8
- - Add center_time into slc.mli.par
-v1.3 20191115 Yu Morishita, Uni of Leeds and GSI
- - Use mli and hgt
-v1.2 20191014 Yu Morishita, Uni of Leeds and GSI
- - Deal with format of uint8 of cc.tif
- - Not available mli
-v1.1 20190824 Yu Morishita, Uni of Leeds and GSI
- - Skip broken geotiff
-v1.0 20190731 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
-
 
 #%% Import
 import getopt

@@ -1,27 +1,8 @@
 #!/usr/bin/env python3
 """
-========
-Overview
-========
 Python3 library of plot functions for LiCSBAS.
 
-=========
-Changelog
-=========
-v1.3.1 20200909 Yu Morishita, GSI
- - fix loc = upper right to avoid UserWarning in plot_hgt_corr
-v1.3 20200902 Yu Morishita, GSI
- - Always use nearest interpolation to avoid expanded nan
-v1.2 20200828 Yu Morioshita, GSI
- - Bug fix in plot_network; use datetime instead of ordinal
- - Update for matplotlib >= 3.3
- - Use nearest interpolation for insar cmap to avoid aliasing
-v1.1 20200228 Yu Morioshita, Uni of Leeds and GSI
- - Remove pdf option in plot_network
- - Add plot_hgt_corr
- - Add plot_gacos_info
-v1.0 20190729 Yu Morioshita, Uni of Leeds and GSI
- - Original implementation
+v1.3.1 20200909 Yu Morishita
 
 """
 import os

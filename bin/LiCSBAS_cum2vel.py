@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.3.4 20230302 Yu Morishita
-
-========
-Overview
-========
 This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file. Amplitude and time offset of the annual displacement can also be calculated by --sin option.
 
 =====
@@ -28,27 +23,6 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x
  --png   Make png file (Default: Not make png)
 
 """
-#%% Change log
-'''
-v1.3.5 20240116 Yu Morishita
- - Fix bug with cmap_dt
-v1.3.4 20230302 Yu Morishita
- - Change mask option
-v1.3.3 20210910 Yu Morishita, GSI
- - Avoid error for refarea in bytes
-v1.3.2 20210125 Yu Morishita, GSI
- - Change cmap for vstd, amp, dt
-v1.3.1 20210107 Yu Morishita, GSI
- - Replace jet with SCM.roma_r
-v1.3 20200703 Yu Morishita, GSI
- - Add --ref_geo option
-v1.2 20190807 Yu Morishita, Uni of Leeds and GSI
- - Add sin option
-v1.1 20190802 Yu Morishita, Uni of Leeds and GSI
- - Make vstd optional
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

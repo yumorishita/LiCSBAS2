@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.6.0 20230116 Yu Morishita
-
 This script applies spatio-temporal filter (HP in time and LP in space with gaussian kernel, same as StaMPS) to the time series of displacement. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 1-3.
 
 ===============
@@ -69,43 +67,6 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
  - Reduce data size in step02 or step05
 
 """
-#%% Change log
-'''
-v1.6.0 20230116 Yu Morishita
- - Add --demerr option to estimate/remove DEM error phase
-v1.5.1 20210311 Yu Morishita, GSI
- - Include noise indices and LOS unit vector in cum.h5 file
-v1.5 20210309 Yu Morishita, GSI
- - Add GPU option but not recommended (hidden option)
- - Speed up by not directry read/write from/to hdf5 file during process
-v1.4.6 20210308 Yu Morishita, GSI
- - Not use multiprocessing when n_para=1
-v1.4.5 20201124 Yu Morishita, GSI
- - Comporess hdf5 file
-v1.4.4 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.4.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.4.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.4.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.4 20201020 Yu Morishita, GSI
- - Add --range[_geo] and --ex_range[_geo] options
-v1.3 20200909 Yu Morishita, GSI
- - Parallel processing
-v1.2 20200228 Yu Morishita, Uni of Leeds and GSI
- - Divide 16filt dir to 16filt_increment and 16filt_cum
- - Change color of png
- - Update about parameters.txt
- - Add --hgt_linear and related options
- - Bag fix for deramp (mask was not applyed)
- - Automatically find stable reference point
-v1.1 20190829 Yu Morishita, Uni of Leeds and GSI
- - Remove cum_filt.h5 if exists before creation
-v1.0 20190731 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

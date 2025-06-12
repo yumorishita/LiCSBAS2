@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.1.4 20230201 Yu Morishita
-
 This script decomposes 2 (or more) LOS displacement data to EW and UD components assuming no NS displacement (neglecting NS). Positive values in the decomposed data mean eastward and upward displacement. The multiple LOS input data can have different coverage and resolution as they are resampled to the common area and resolution during the processing.
 
 Reference:
@@ -29,20 +27,6 @@ LiCSBAS_decomposeLOS.py -f files.txt [-o outfile] [-r resampleAlg] [--out_stats]
  --out_stats  Output statistics (e.g. residuals, n_data)
 
 """
-#%% Change log
-'''
-v1.1.4 20230201 Yu Morishita
- - Bug fix in LOSu (LOSu was filled by 1 instead of 0 where LOSen=0)
-   Wrong results were returned if multiple data with different coverage used
-v1.1.3 20210802 Yu Morishita, GSI
- - Bug fix for identifying LOS direction
-v1.1.2 20210209 Yu Morishita, GSI
- - Move make_geotiff to library
-v1.1 20200608 Yu Morishita, GSI
- - Add --out_stats option
-v1.0 20200528 Yu Morishita, GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.2.3 20230302 Yu Morishita
-
-========
-Overview
-========
 This script outputs a float32 file of cumulative displacement from cum*.h5.
 
 =====
@@ -25,21 +20,6 @@ LiCSBAS_cum2flt.py -d yyyymmdd [-i infile] [-o outfile] [-m yyyymmdd] [-r x1:x2/
  --png   Make png file (Default: Not make png)
 
 """
-#%% Change log
-'''
-v1.2.3 20230302 Yu Morishita
- - Change mask option
-v1.2.2 20210910 Yu Morishita, GSI
- - Avoid error for refarea in bytes
-v1.2.1 20210107 Yu Morishita, GSI
- - Replace jet with SCM.roma_r
-v1.2 20200703 Yu Morishita, GSI
- - Add --ref_geo option
-v1.1 20190813 Yu Morishita, Uni of Leeds and GSI
- - Bug fix about masking
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

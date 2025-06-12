@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.3.5 20210105 Yu Morishita, GSI
-
 This script masks specified areas or low coherence areas in the unw data. The masking is effective when the unw data include areas which have many unwrapping errors and are not of interest, and can improve the result of Step 1-2 (loop closure). Existing files are not re-created to save time, i.e., only the newly available data will be processed. This step is optional.
 
 ===============
@@ -37,27 +35,6 @@ LiCSBAS04op_mask_unw.py -i in_dir -o out_dir [-c coh_thre] [-r x1:x2/y1:y2] [-f 
  Note: either -c, -r or -f must be specified.
 
 """
-#%% Change log
-'''
-v1.3.5 20210105 Yu Morishita, GSI
- - Fill 0 by nan in unw
-v1.3.4 20201119 Yu Morishita, GSI
- - Change default cmap for wrapped phase from insar to SCM.romaO
-v1.3.3 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.3.2 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.3.1 20201028 Yu Morishita, GSI
- - Update how to get n_para
-v1.3 20200909 Yu Morishita, GSI
- - Parallel processing
-v1.2 20200614 Yu Morishita, GSI
- - Wrong png name printing fixed
-v1.1 20200409 Yu Morishita, GSI
- - Add -c (coherence based mask) option
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt
@@ -85,7 +62,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.5"; date=20210105; author="Y. Morishita"
+    ver="1.3.6"; date=20250529; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 

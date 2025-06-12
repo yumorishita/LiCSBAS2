@@ -1,12 +1,6 @@
 #!/bin/bash -eu
-#
 # Edit parameters in batch_LiCSBAS.sh.
-#
-# v1.1 20200623 Yu Morishita, GSI
-#  - Enable comment out by #
-# v1.0 20200407 Yu Morishita, GSI
-#
-ver="1.0";day="20200407";auther="Y. Morishita, GSI"
+ver="1.1";day="20200623";auther="Y. Morishita"
 
 if [ $# -lt 2 ];then
   echo ""

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.0 20200225 Yu Morishita, Uni of Leeds and GSI
-
-========
-Overview
-========
 This script creates a png file (or in other formats) of SB network. A Gap of the network are denoted by a black vertical line if a gap exist. Bad ifgs can be denoted by red lines.
 
 =====
@@ -21,12 +16,6 @@ LiCSBAS_plot_network.py -i ifg_list -b bperp_list [-o outpngfile] [-r bad_ifg_li
  --not_plot_bad  Not plot bad ifgs with red lines
 
 """
-
-#%% Change log
-'''
-v1.0 20200225 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt

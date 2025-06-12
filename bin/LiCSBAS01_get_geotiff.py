@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.6.5 20240607 Yu Morishita
-
-========
-Overview
-========
 This script downloads GeoTIFF files of unw (unwrapped interferogram) and cc (coherence) in the specified frame ID from COMET-LiCS web portal. The -f option is not necessary when the frame ID can be automatically identified from the name of the working directory. GACOS data can also be downloaded if available. Existing GeoTIFF files are not re-downloaded to save time, i.e., only the newly available data will be downloaded.
 
 ============
@@ -36,38 +31,6 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
  --n_para  Number of parallel downloading (Default: 4)
 
 """
-#%% Change log
-'''
-v1.6.5 20240607 Yu Morishita
- - Fix bug with requests folder url
-v1.6.4 20230215 Yu Morishita
- - Update LiCSARweb URL
-v1.6.3 20201207 Yu Morishita, GSI
- - Download network.png
- - Search latest epoch for mli to save times
-v1.6.2 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.6.1 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.6 20200911 Yu Morishita, GSI
- - Parallel downloading
- - Check time stamp and size
- - Log size, elapsed time, and download speed
-v1.5 20200623 Yu Morishita, GSI
- - Speed up (small bug fix) when re-downloading
-v1.4 20200503 Yu Morishita, GSI
- - Update download_data (thanks to sahitono)
-v1.3 20200311 Yu Morishita, Uni of Leeds and GSI
- - Deal with only new LiCSAR file structure
-v1.2 20200302 Yu Morishita, Uni of Leeds and GSI
- - Compatible with new LiCSAR file structure (backward-compatible)
- - Add --get_gacos option
-v1.1 20191115 Yu Morishita, Uni of Leeds and GSI
- - Download mli and hgt
-v1.0 20190729 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
-
 
 #%% Import
 import getopt

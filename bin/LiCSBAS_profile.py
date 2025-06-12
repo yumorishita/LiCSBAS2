@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.1 20200902 Yu Morishita, GSI
-
-========
-Overview
-========
 This script gets a profile data between two points specified in geographical coordinates or xy coordinates from a float file. A quick look image is displayed and a text file and kml file are output. 
 
 =====
@@ -24,13 +19,6 @@ LiCSBAS_profile.py -i infile -p dempar [-r x1,y1/x2,y2] [-g lon1,lat1/lon2,lat2]
  Note: either -r or -g must be specified.
 
 """
-#%% Change log
-'''
-v1.1 20200902 Yu Morishita, GSI
- - Use nearest interpolation to avoid expanded nan
-v1.0 20190916 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
-'''
 
 #%% Import
 import getopt

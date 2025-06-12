@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.0 20190731 Yu Morishita, Uni of Leeds and GSI
-
-========
-Overview
-========
 This script masks a float32 file using a mask file.
 
 =====
@@ -17,11 +12,6 @@ LiCSBAS_mask_flt.py -i infile -m maskfile [-o outfile]
  -o  Output masked float file (Default: infile.mskd)
 
 """
-#%% Change log
-'''
-v1.0 20190731 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 # [--png]
 # --png   Make png file (Default: No)

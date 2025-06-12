@@ -1,32 +1,8 @@
 #!/usr/bin/env python3
 """
-========
-Overview
-========
 Python3 library of time series inversion functions for LiCSBAS.
 
-=========
-Changelog
-=========
-v1.5.1 20210309 Yu Morishita, GSI
- - Add GPU option into calc_velstd_withnan and calc_stc
-v1.5 20210305 Yu Morishita, GSI
- - Add GPU option into invert_nsbas
-v1.4.2 20201118 Yu Morishita, GSI
- - Again Bug fix of multiprocessing
-v1.4.1 20201116 Yu Morishita, GSI
- - Bug fix of multiprocessing in Mac python>=3.8
-v1.4 20200703 Yu Morioshita, GSI
- - Replace problematic terms
-v1.3 20200103 Yu Morioshita, Uni of Leeds and GSI
- - Bag fix in calc_stc (return nonzero even if two adjacent pixels have identical ts)
-v1.2 20190823 Yu Morioshita, Uni of Leeds and GSI
- - Bag fix in calc_velstd_withnan
- - Remove calc_velstd
-v1.1 20190807 Yu Morioshita, Uni of Leeds and GSI
- - Add calc_velsin
-v1.0 20190730 Yu Morioshita, Uni of Leeds and GSI
- - Original implementation
+v1.5.1 20210309 Yu Morishita
 """
 
 import warnings

@@ -1,41 +1,8 @@
 #!/usr/bin/env python3
 """
-========
-Overview
-========
 Python3 library of time series analysis tools for LiCSBAS.
 
-=========
-Changelog
-=========
 v1.9 20230216 Yu Morishita
- - Avoid error in new matplotlib in get_cmap
- - Make cm_insar perceptually uniform
-v1.8 20210309 Yu Morishita, GSI
- - Add GPU option to fit2dh (but not recommended)
-v1.7 20210205 Yu Morishita, GSI
- - Add cm_insar, cm_isce, get_cmap
-v1.6.2 20201225 Yu Morishita, GSI
- - Avoid error when remote file is empty
-v1.6.1 20201207 Yu Morishita, GSI
- - Check size and retry if error in download_data
-v1.6 20200911 Yu Morishita, GSI
- - STDOUT time and size in download_data
- - Add convert_size
-v1.5 20200828 Yu Morishita, GSI
- - Update for matplotlib >= 3.3
- - Use nearest interpolation for insar cmap to avoid aliasing
-v1.4 20200703 Yu Morishita, GSI
- - Replace problematic terms
- - Small bug (shift) fix in read_range_geo
-v1.3 20200503 Yu Morishita, GSI
- - Update download_data (thanks to sahitono)
-v1.2 20200227 Yu Morishita, Uni of Leeds and GSI
- - Add read_point and fit2dh
-v1.1 20190916 Yu Morishita, Uni of Leeds and GSI
- - Add read_range_line and read_range_line_geo
-v1.0 20190730 Yu Morishita, Uni of Leeds and GSI
- - Original implementation
 """
 import os
 import sys

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.5.1 20210209 Yu Morishita, GSI
-
-========
-Overview
-========
 This script makes a GeoTIFF file from an image file (only in float32 format). The geotiff file can be read by a GIS software (e.g., QGIS) and used to make a figure. Nan will be regarded as NoDataValue as default. 0 can be replaced with nan.
 
 =====
@@ -23,24 +18,6 @@ LiCSBAS_flt2geotiff.py -i infile -p dempar [-o outfile] [--zero2nan] [--nan2zero
 
 """
 ## Hidden option: --gamma
-
-#%% Change log
-'''
-v1.5.1 20210209 Yu Morishita, GSI
- - Move make_geotiff to library
-v1.5 20200902 Yu Morishita, GSI
- - Do not add .geo when already added
-v1.4 20200214 Yu Morishita, Uni of Leeds and GSI
- - Change Default nodata to nan
- - Remove --keep_nan and add --nan2zero
-v1.3 20200211 Yu Morishita, Uni of Leeds and GSI
- - Add --keep_nan, --zero2nan, and --nodata options
- - Change default to replace nan with 0.
-v1.2 20200130 Yu Morishita, Uni of Leeds and GSI
- - Add compress option with DEFLATE for gdal
-v1.0 20190729 Yu Morishita, Uni of Leeds and GSI
- - Original implementationf
-'''
 
 #%% Import
 import getopt
