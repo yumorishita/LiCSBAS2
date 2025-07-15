@@ -56,7 +56,7 @@ LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
  --multi_prime  Multi Prime mode (take into account bias in loop)
  --rm_ifg_list  Manually remove ifgs listed in a file
  --rm_noloop_ifg  Remove ifgs with no loop
- --n_para  Number of parallel processing (Default: # of usable CPU)
+ --n_para  Number of parallel processing (Default: # of usable CPU-1)
 
 """
 
@@ -107,9 +107,9 @@ def main(argv=None):
     rm_noloop_ifg = False
 
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
-        n_para = multi.cpu_count()
+        n_para = max(multi.cpu_count()-1, 1)
 
     cycle = 3 # 2pi*3/cycle
     cmap_noise = 'viridis'

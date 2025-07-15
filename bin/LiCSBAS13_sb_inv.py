@@ -64,7 +64,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
               Weight (variance) is calculated by (1-coh**2)/(2*coh**2)
  --mem_size   Max memory size for each patch in MB. (Default: 8000)
  --gamma      Gamma value for NSBAS inversion (Default: 0.0001)
- --n_para     Number of parallel processing (Default: # of usable CPU)
+ --n_para     Number of parallel processing (Default: # of usable CPU-1)
  --n_unw_r_thre
      Threshold of n_unw (number of used unwrap data)
      (Note this value is ratio to the number of images; i.e., 1.5*n_im)
@@ -125,9 +125,9 @@ def main(argv=None):
     gpu = False
 
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
-        n_para = multi.cpu_count()
+        n_para = max(multi.cpu_count()-1, 1)
 
     os.environ["OMP_NUM_THREADS"] = "1"
     # Because np.linalg.lstsq use full CPU but not much faster than 1CPU.
@@ -920,7 +920,8 @@ def inc_png_wrapper(imx):
         unw = np.zeros((length, width), dtype=np.float32)*np.nan
 
     ### Output png for comparison
-    data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle) for data in [unw, inc, inc-unw]]
+    data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle).astype(np.float32) for data in [unw, inc, inc-unw]]
+    del unw, inc
     title3 = ['Daisy-chain IFG ({}pi/cycle)'.format(cycle*2), 'Inverted ({}pi/cycle)'.format(cycle*2), 'Difference ({}pi/cycle)'.format(cycle*2)]
     pngfile = os.path.join(incdir, '{}.increment.png'.format(ifgd))
     plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)

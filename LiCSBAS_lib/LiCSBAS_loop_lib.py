@@ -145,5 +145,5 @@ def make_loop_png(unw12, unw23, unw13, loop_ph, png, titles4, cycle):
 
     plt.tight_layout()
     plt.savefig(png)
-    plt.close()
+    plt.close(fig)
 

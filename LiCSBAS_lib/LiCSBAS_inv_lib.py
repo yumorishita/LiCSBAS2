@@ -143,7 +143,7 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
 
 def censored_lstsq_slow_para_wrapper(i):
     ### Use global value
-    if np.mod(i, 1000) == 0:
+    if np.mod(i, 10000) == 0:
         print('  Running {0:6}/{1:6}th point...'.format(i, unw_tmp.shape[1]), flush=True)
     m = mask[:,i] # drop rows where mask is zero
     try:
@@ -216,7 +216,7 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
 
 def wls_nsbas(i):
     ### Use global value of Gall, unw_tmp, mask
-    if np.mod(i, 1000) == 0:
+    if np.mod(i, 10000) == 0:
         print('  Running {0:6}/{1:6}th point...'.format(i, unw_tmp.shape[1]), flush=True)
 
     ## Weight unw and G
@@ -533,7 +533,7 @@ def censored_lstsq_slow(A, B, M):
 
     X = np.empty((A.shape[1], B.shape[1]))
     for i in range(B.shape[1]):
-        if np.mod(i, 1000) == 0:
+        if np.mod(i, 10000) == 0:
              print('\r  Running {0:6}/{1:6}th point...'.format(i, B.shape[1]), end='', flush=True)
 
         m = M[:,i] # drop rows where mask is zero

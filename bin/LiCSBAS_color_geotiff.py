@@ -153,7 +153,7 @@ if __name__ == "__main__":
         cbarfile = "{}_{}_{}.pdf".format(cmap_name, cmin, cmax)
         plt.tight_layout()
         plt.savefig(cbarfile, transparent=True)
-        plt.close()
+        plt.close(fig)
 
 
     #%% Remove intermediate files

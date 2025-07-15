@@ -22,7 +22,7 @@ LiCSBAS_color_geotiff2tiles.py -i infile [-o outdir] [--zmin int] [--zmax int]
          12 (pixel spacing <= 160m)
          11 (pixel spacing >  160m)
  --xyz     Output XYZ tiles instead of TMS (opposite Y)
- --n_para  Number of parallel processing (Default: # of usable CPU)
+ --n_para  Number of parallel processing (Default: # of usable CPU-1)
            Available only in gdal>=2.3
 
 """
@@ -68,9 +68,9 @@ def main(argv=None):
     zmax = []
     tms_flag = True
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
-        n_para = multi.cpu_count()
+        n_para = max(multi.cpu_count()-1, 1)
 
     q = multi.get_context('fork')
 

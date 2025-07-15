@@ -42,20 +42,22 @@ LiCSBAS03op_GACOS.py -i in_dir -o out_dir [-g gacosdir] [--fillhole] [--n_para i
  -o  Path to the output dir
  -g  Path to the dir containing GACOS data (Default: GACOS)
  --fillhole  Fill holes of GACOS data at hgt=0 in SRTM3 by averaging surrounding pixels
- --n_para  Number of parallel processing (Default: # of usable CPU)
+ --n_para  Number of parallel processing (Default: # of usable CPU-1)
 
 """
 
 #%% Import
 import getopt
+import glob
+import multiprocessing as multi
 import os
+import shutil
 import sys
 import time
-import shutil
-import glob
+
 import numpy as np
 from osgeo import gdal
-import multiprocessing as multi
+
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -147,9 +149,9 @@ def main(argv=None):
     resampleAlg = 'cubicspline'# None # 'cubic'
     fillholeflag = False
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = len(os.sched_getaffinity(0)) - 1
     except:
-        n_para = multi.cpu_count()
+        n_para = multi.cpu_count() - 1
 
     q = multi.get_context('fork')
     cmap_wrap = tools_lib.get_cmap('cm_insar')
@@ -486,7 +488,8 @@ def correct_wrapper(i):
     ssltd[ssltd==0] = np.nan
 
     dsltd = ssltd-msltd
-
+    del msltd, ssltd
+    
     ### Correct unw
     unw = io_lib.read_img(unwfile, length_unw, width_unw)
 
@@ -509,15 +512,17 @@ def correct_wrapper(i):
 
 
     ### Output png for comparison
-    data3 = [np.angle(np.exp(1j*(data/cycle))*cycle) for data in [unw, unw_cor, dsltd]]
+    data3 = [np.angle(np.exp(1j*(data/cycle))*cycle).astype(np.float32) for data in [unw, unw_cor, dsltd]]
     title3 = ['unw_org (STD: {:.1f} rad)'.format(std_unw), 'unw_cor (STD: {:.1f} rad)'.format(std_unwcor), 'dsltd ({:.1f}% reduced)'.format(rate)]
     pngfile = os.path.join(out_dir1, ifgd+'.gacos.png')
     plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
+    del dsltd, unw, data3
 
     ## Output png for corrected unw
     pngfile = os.path.join(out_dir1, ifgd+'.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle*2)
     plot_lib.make_im_png(np.angle(np.exp(1j*unw_cor/cycle)*cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
+    del unw_cor
 
     return 2, [ifgd, std_unw, std_unwcor, rate]
 

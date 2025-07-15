@@ -38,7 +38,7 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
  -n  Number of donwsampling factor (Default: 1, no donwsampling)
  --freq    Radar frequency in Hz (Default: 5.405e9 for Sentinel-1)
            (e.g., 1.27e9 for ALOS, 1.2575e9 for ALOS-2/U, 1.2365e9 for ALOS-2/{F,W})
- --n_para  Number of parallel processing (Default: # of usable CPU)
+ --n_para  Number of parallel processing (Default: # of usable CPU-1)
 
 """
 
@@ -85,9 +85,9 @@ def main(argv=None):
     nlook = 1
     radar_freq = 5.405e9
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
-        n_para = multi.cpu_count()
+        n_para = max(multi.cpu_count()-1, 1)
 
     cmap_wrap = tools_lib.get_cmap('cm_insar')
     cycle = 3

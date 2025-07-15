@@ -30,7 +30,7 @@ LiCSBAS04op_mask_unw.py -i in_dir -o out_dir [-c coh_thre] [-r x1:x2/y1:y2] [-f 
  -r  Range to be masked. Index starts from 0.
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  -f  Text file of a list of ranges to be masked (format is x1:x2/y1:y2)
- --n_para  Number of parallel processing (Default: # of usable CPU)
+ --n_para  Number of parallel processing (Default: # of usable CPU - 1)
 
  Note: either -c, -r or -f must be specified.
 
@@ -77,9 +77,9 @@ def main(argv=None):
     ex_range_str = []
     ex_range_file = []
     try:
-        n_para = len(os.sched_getaffinity(0))
+        n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
-        n_para = multi.cpu_count()
+        n_para = max(multi.cpu_count()-1, 1)
 
     cmap_noise = 'viridis'
     cmap_wrap = tools_lib.get_cmap('cm_insar')
