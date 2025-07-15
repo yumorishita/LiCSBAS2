@@ -21,7 +21,7 @@ end_step="16"	# 01-05, 11-16
 
 nlook="1"	# multilook factor, used in step02
 GEOCmldir="GEOCml${nlook}"	# If start from 11 or later after doing 03-05, use e.g., GEOCml${nlook}GACOSmaskclip
-n_para="" # Number of paralell processing in step 02-05,12,13,16. default: number of usable CPU
+n_para="" # Number of paralell processing in step 02-05,12,13,16. default: number of usable CPU-1
 gpu="n"	# y/n
 check_only="n" # y/n. If y, not run scripts and just show commands to be done
 
@@ -76,29 +76,29 @@ p01_n_para=""	# default: 4
 p02_GEOCdir=""	# default: GEOC
 p02_GEOCmldir=""	# default: GEOCml$nlook
 p02_freq=""	# default: 5.405e9 Hz
-p02_n_para=""   # default: # of usable CPU
+p02_n_para=""   # default: # of usable CPU-1
 p03_inGEOCmldir=""	# default: $GEOCmldir
 p03_outGEOCmldir_suffix="" # default: GACOS
 p03_fillhole="y"	# y/n. default: n
 p03_gacosdir=""	# default: GACOS
-p03_n_para=""   # default: # of usable CPU
+p03_n_para=""   # default: # of usable CPU-1
 p04_inGEOCmldir=""	# default: $GEOCmldir
 p04_outGEOCmldir_suffix="" # default: mask
-p04_n_para=""   # default: # of usable CPU
+p04_n_para=""   # default: # of usable CPU-1
 p05_inGEOCmldir=""      # default: $GEOCmldir
 p05_outGEOCmldir_suffix="" # default: clip
-p05_n_para=""   # default: # of usable CPU
+p05_n_para=""   # default: # of usable CPU-1
 p11_GEOCmldir=""	# default: $GEOCmldir
 p11_TSdir=""	# default: TS_$GEOCmldir
 p12_GEOCmldir=""        # default: $GEOCmldir
 p12_TSdir=""    # default: TS_$GEOCmldir
-p12_n_para=""	# default: # of usable CPU
+p12_n_para=""	# default: # of usable CPU-1
 p13_GEOCmldir=""        # default: $GEOCmldir
 p13_TSdir=""    # default: TS_$GEOCmldir
 p13_inv_alg=""	# LS (default) or WLS
 p13_mem_size=""	# default: 8000 (MB)
 p13_gamma=""	# default: 0.0001
-p13_n_para=""	# default: # of usable CPU
+p13_n_para=""	# default: # of usable CPU-1
 p13_n_unw_r_thre=""	# defualt: 1
 p13_keep_incfile="n"	# y/n. default: n
 p14_TSdir=""    # default: TS_$GEOCmldir
@@ -110,7 +110,7 @@ p15_keep_isolated="n"	# y/n. default: n
 p15_noautoadjust="n" # y/n. default: n
 p16_TSdir=""    # default: TS_$GEOCmldir
 p16_nomask="n"	# y/n. default: n
-p16_n_para=""   # default: # of usable CPU
+p16_n_para=""   # default: # of usable CPU-1
 
 
 #############################

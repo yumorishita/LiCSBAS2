@@ -55,7 +55,7 @@ def make_im_png(data, pngfile, cmap, title, vmin=None, vmax=None, cbar=True):
     if cbar: fig.colorbar(im)
 
     plt.savefig(pngfile)
-    plt.close()
+    plt.close(fig)
 
     return
 
@@ -87,6 +87,7 @@ def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
             data3[i][data3[i]==0] = np.nan # as no data
         ax = fig.add_subplot(1, 3, i+1) #index start from 1
         im = ax.imshow(data3[i], vmin=vmin, vmax=vmax, cmap=cmap, interpolation=interp)
+        data3[i] = [] # delete to save memory
         ax.set_title(title3[i])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
@@ -94,7 +95,7 @@ def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
 
     plt.tight_layout()
     plt.savefig(pngfile)
-    plt.close()
+    plt.close(fig)
 
     return
 
@@ -189,7 +190,7 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
     ax.legend(loc='upper right')
     fig.tight_layout()
     fig.savefig(pngfile)
-    plt.close()
+    plt.close(fig)
 
     return
 
@@ -288,4 +289,4 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
 
     ### Save
     plt.savefig(pngfile)
-    plt.close()
+    plt.close(fig)
