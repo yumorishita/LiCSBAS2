@@ -132,7 +132,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.6"; date=20250529; author="Y. Morishita"
+    ver="1.5.7"; date=20250715; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 

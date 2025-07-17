@@ -2,7 +2,7 @@
 """
 Python3 library of time series inversion functions for LiCSBAS.
 
-v1.5.1 20210309 Yu Morishita
+v1.5.2 20250715 Yu Morishita
 """
 
 import warnings

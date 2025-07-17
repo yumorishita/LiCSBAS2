@@ -2,7 +2,7 @@
 """
 Python3 library of plot functions for LiCSBAS.
 
-v1.3.1 20200909 Yu Morishita
+v1.3.2 20250715 Yu Morishita
 
 """
 import os
