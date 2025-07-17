@@ -2,7 +2,7 @@
 """
 Python3 library of loop closure check functions for LiCSBAS.
 
-v1.5.2 20210303 Yu Morishita
+v1.5.3 20250715 Yu Morishita
 """
 
 import os
