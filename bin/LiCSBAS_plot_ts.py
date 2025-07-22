@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.1"; date=20250722; author="Y. Morishita"
+    ver="1.14.2"; date=20250722; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -682,7 +682,7 @@ if __name__ == "__main__":
         ii1h = ii-0.5; ii2h = ii+1-0.5 ## Shift half for plot
         jj1h = jj-0.5; jj2h = jj+1-0.5
         pax.set_data([jj1h, jj2h, jj2h, jj1h, jj1h], [ii1h, ii1h, ii2h, ii2h, ii1h])
-        pax2.set_data(jj, ii)
+        pax2.set_data([jj], [ii])
         pv.canvas.draw()
 
         axts.cla()
