@@ -62,7 +62,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.7"; date=20250715; author="Y. Morishita"
+    ver="1.3.8"; date=20250722; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -170,7 +170,7 @@ def main(argv=None):
             coh_avg += coh
             n_coh += (coh!=0)
 
-        n_coh[n_coh==0] = 99999 #to avoid zero division
+        n_coh[n_coh==0] = 32767 #to avoid zero division
         coh_avg = coh_avg/n_coh
 
         ### Set mask
