@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.0"; date=20230219; author="Y. Morishita"
+    ver="1.14.1"; date=20250722; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -360,9 +360,14 @@ if __name__ == "__main__":
 
 
     #%% Read LOSu
-    LOSu = cumh5['U.geo']
-    inc_agl_deg = np.rad2deg(np.arccos(LOSu))
-
+    if 'U.geo' in list(cumh5.keys()):
+        LOSu_flag = True
+        LOSu = cumh5['U.geo']
+        inc_agl_deg = np.rad2deg(np.arccos(LOSu))
+    else:
+        LOSu_flag = False
+        print('No U.geo field found in {}. Skip.'.format(cumfile))
+    
 
     #%% Read noise indecies
     mapdict_data = {}
@@ -699,8 +704,9 @@ if __name__ == "__main__":
             else:
                 noisetxt = noisetxt+'{}: {:.2f} {}\n'.format(key, val, unit)
 
-        noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
-        noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
+        if LOSu_flag:
+            noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
+            noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
 
         ### Get lat lon and show Ref info at side
         if geocod_flag:
