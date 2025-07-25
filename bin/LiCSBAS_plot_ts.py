@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.2"; date=20250722; author="Y. Morishita"
+    ver="1.14.3"; date=20250725; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -739,10 +739,11 @@ if __name__ == "__main__":
         dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
 
         ## fit function
+        dday_min01 = min(np.gradient(imdates_ordinal))/10
         lines1 = [0, 0, 0, 0]
-        xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
-        td10day = dt.timedelta(days=10)
-        xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
+        xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], dday_min01)
+        td_dday_min01 = dt.timedelta(days=dday_min01)
+        xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td_dday_min01)
         for model, vis in enumerate(visibilities):
             yvalues = calc_model(dph, imdates_ordinal, xvalues, model)
             lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
