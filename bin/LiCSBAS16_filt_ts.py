@@ -106,7 +106,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.1"; date=20250715; author="Y. Morishita"
+    ver="1.6.2"; date=20250725; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -783,6 +783,7 @@ def filter_wrapper(i):
 
     ### Third, LP in space and subtract from original
     if filtwidth_km == 0.0:
+        del cum_hpt
         _cum_filt = cum[i, :, :] ## No spatial
     else:
         with warnings.catch_warnings(): ## To silence warning
@@ -792,17 +793,16 @@ def filter_wrapper(i):
             warnings.simplefilter('ignore', RuntimeWarning)
             kernel = Gaussian2DKernel(x_stddev, y_stddev)
             cum_hptlps = convolve_fft(cum_hpt*mask, kernel, fill_value=np.nan, allow_huge=True) ## fill edge 0 for interpolation
+            del cum_hpt
             cum_hptlps[cum_hptlps == 0] = np.nan ## fill 0 with nan
 
         _cum_filt = cum[i, :, :] - cum_hptlps
 
-    del cum_hpt
-
-    ### Output comparison image
-    data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle).astype(np.float32) for data in [cum[i, :, :]*mask, cum_hptlps*mask, _cum_filt*mask]]
-    title3 = ['Before filter ({}pi/cycle)'.format(cycle*2), 'Filter phase ({}pi/cycle)'.format(cycle*2), 'After filter ({}pi/cycle)'.format(cycle*2)]
-    pngfile = os.path.join(filtcumdir, imdates[i]+'_filt.png')
-    plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
+        ### Output comparison image
+        data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle).astype(np.float32) for data in [cum[i, :, :]*mask, cum_hptlps*mask, _cum_filt*mask]]
+        title3 = ['Before filter ({}pi/cycle)'.format(cycle*2), 'Filter phase ({}pi/cycle)'.format(cycle*2), 'After filter ({}pi/cycle)'.format(cycle*2)]
+        pngfile = os.path.join(filtcumdir, imdates[i]+'_filt.png')
+        plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
 
     return _cum_filt
 
