@@ -1,7 +1,7 @@
 #!/bin/bash -eu
 
 # LiCSBAS steps:
-#  01: LiCSBAS01_get_geotiff.py
+#  01: LiCSBAS01_get_geotiff*.py
 #  02: LiCSBAS02_ml_prep.py
 #  03: LiCSBAS03op_GACOS.py (optional)
 #  04: LiCSBAS04op_mask_unw.py (optional)
@@ -40,9 +40,11 @@ p05_clip_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p05_clip_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 
 ### Frequently used options. If blank, use default. ###
+p01_source="COMET_S1"	# COMET_S1 or AIST_AL
 p01_start_date=""	# default: 20141001
 p01_end_date=""	# default: today
-p01_get_gacos="n" # y/n 
+p01_unwrate_min="" # default: 0.3, only for AIST_AL
+p01_get_gacos="n" # y/n, only for COMET_S1
 p11_unw_thre=""	# default: 0.3
 p11_coh_thre=""	# default: 0.05
 p12_loop_thre=""	# default: 1.5 rad
@@ -71,7 +73,9 @@ p16_ex_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p16_ex_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 
 ### Less frequently used options. If blank, use default. ###
-p01_frame=""	# e.g. 021D_04972_131213 
+p01_frame=""	# e.g. 021D_04972_131213 or 406_0710_343
+p01_bperp_max=""  # default: 10000 m, only for AIST_AL
+p01_dt_max="" # default: 2000 days, only for AIST_AL
 p01_n_para=""	# default: 4
 p02_GEOCdir=""	# default: GEOC
 p02_GEOCmldir=""	# default: GEOCml$nlook
@@ -128,13 +132,25 @@ if [ $start_step -le 01 -a $end_step -ge 01 ];then
   if [ ! -z $p01_frame ];then p01_op="$p01_op -f $p01_frame"; fi
   if [ ! -z $p01_start_date ];then p01_op="$p01_op -s $p01_start_date"; fi
   if [ ! -z $p01_end_date ];then p01_op="$p01_op -e $p01_end_date"; fi
-  if [ $p01_get_gacos == "y" ];then p01_op="$p01_op --get_gacos"; fi
   if [ ! -z $p01_n_para ];then p01_op="$p01_op --n_para $p01_n_para"; fi
 
-  if [ $check_only == "y" ];then
-    echo "LiCSBAS01_get_geotiff.py $p01_op"
+  if [ $p01_source == "COMET_S1" ];then
+    LiCSBAS01cmd="LiCSBAS01_get_geotiff.py"
+    if [ $p01_get_gacos == "y" ];then p01_op="$p01_op --get_gacos"; fi
+  elif [ $p01_source == "AIST_AL" ];then
+    LiCSBAS01cmd="LiCSBAS01_get_geotiff_ALOS.py"
+    if [ ! -z $p01_unwrate_min ];then p01_op="$p01_op -u $p01_unwrate_min"; fi
+    if [ ! -z $p01_bperp_max ];then p01_op="$p01_op -b $p01_bperp_max"; fi
+    if [ ! -z $p01_dt_max ];then p01_op="$p01_op -t $p01_dt_max"; fi
   else
-    LiCSBAS01_get_geotiff.py $p01_op 2>&1 | tee -a $log
+    echo "ERROR: p01_source must be COMET_S1 or AIST_AL"
+    exit 1
+  fi
+
+  if [ $check_only == "y" ];then
+    echo "$LiCSBAS01cmd $p01_op"
+  else
+    $LiCSBAS01cmd $p01_op 2>&1 | tee -a $log
     if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
   fi
 fi
