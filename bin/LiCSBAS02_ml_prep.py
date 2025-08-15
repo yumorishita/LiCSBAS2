@@ -71,7 +71,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.5"; date=20250715; author="Y. Morishita"
+    ver="1.7.6"; date=20250815; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -83,7 +83,6 @@ def main(argv=None):
     geocdir = []
     outdir = []
     nlook = 1
-    radar_freq = 5.405e9
     try:
         n_para = max(len(os.sched_getaffinity(0))-1, 1)
     except:
@@ -145,10 +144,20 @@ def main(argv=None):
 
     metadata_file = os.path.join(geocdir, 'metadata.txt')
     if os.path.exists(metadata_file):
-        center_time = subp.check_output(['grep', 'center_time', metadata_file]).decode().split('=')[1].strip()
+        print('Read metadata from {}'.format(os.path.basename(metadata_file)), flush=True)
+        try:
+            center_time = subp.check_output(['grep', 'center_time', metadata_file]).decode().split('=')[1].strip()
+        except subp.CalledProcessError:
+            print('  No center_time found in metadata.txt. Set to None.', flush=True)
+            center_time = None
+        try:
+            radar_freq = subp.check_output(['grep', 'radar_freq', metadata_file]).decode().split('=')[1].strip()
+        except subp.CalledProcessError:
+            print('  No radar_freq found in metadata.txt. Set to default (5.405e9 Hz for Sentinel-1).', flush=True)
+            radar_freq = 5.405e9
     else:
         center_time = None
-
+        radar_freq = 5.405e9 # default for Sentinel-1
 
     #%% ENU
     for ENU in ['E', 'N', 'U']:
@@ -282,8 +291,6 @@ def main(argv=None):
     #%% EQA.dem_par, slc.mli.par
     if not os.path.exists(mlipar):
         print('\nCreate slc.mli.par', flush=True)
-#        radar_freq = 5.405e9 ## fixed for Sentnel-1
-
         with open(mlipar, 'w') as f:
             print('range_samples:   {}'.format(width), file=f)
             print('azimuth_lines:   {}'.format(length), file=f)
