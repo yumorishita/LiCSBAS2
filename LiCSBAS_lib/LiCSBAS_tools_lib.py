@@ -2,7 +2,7 @@
 """
 Python3 library of time series analysis tools for LiCSBAS.
 
-v1.9 20230216 Yu Morishita
+v1.10.0 20250907 Yu Morishita
 """
 import os
 import sys
@@ -13,6 +13,7 @@ import dateutil
 import datetime as dt
 import numpy as np
 import warnings
+from bs4 import BeautifulSoup
 import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap as LSC
 from matplotlib import pyplot as plt
@@ -190,6 +191,35 @@ def convert_size(size_bytes):
    p = np.power(1024, i)
    s = round(size_bytes / p, 2)
    return "%s%s" % (s, size_name[i])
+
+
+def extract_url_licsar(url):
+    ''' new since Aug 2025+: URL gets different from direct to HTML file with a link..
+    '''
+    # first try if the direct url actually works (old version):
+    response = requests.head(url, allow_redirects=True)
+    if response.status_code == 200:
+        return url
+    else:
+        fname = os.path.basename(url)
+        url = os.path.dirname(url)
+        # transition period - both old and new version exist - try the temporary url:
+        url = url.replace('LiCSAR_products/', 'LiCSAR_products.future/')
+        response = requests.get(url)
+        if response.status_code != 200:
+            # perhaps already after the transition? Getting it back:
+            url = url.replace('LiCSAR_products.future/', 'LiCSAR_products/')
+            response = requests.get(url)
+            if response.status_code != 200:
+                return None # this also does not exist
+        response.encoding = response.apparent_encoding  # avoid garble
+        html_doc = response.text
+        soup = BeautifulSoup(html_doc, "html.parser")
+        tag = soup.find(href=re.compile(fname))
+        if tag:
+            return tag.get('href')
+        else:
+            return None
 
 
 #%%
