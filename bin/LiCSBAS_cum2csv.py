@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This script output csv file containing all time series data from cum*.h5.
+This script outputs csv file containing all time series data from cum*.h5.
 The output csv can be opened in QGIS (as a delimited text layer)
 and the time series can be interactively plotted by InSAR Explorer plugin
 (https://insar-explorer.readthedocs.io/en/latest/).
@@ -145,7 +145,7 @@ def main(cumfile='cum_filt.h5',
 # %% if main
 if __name__ == "__main__":
     # Read arg
-    description = 'Download AIST ALOS InSAR products for LiCSBAS.'
+    description = 'Output csv from cum*h5.'
     parser = argparse.ArgumentParser(description=description)
     addarg = parser.add_argument
     addarg('-i', '--input', default='cum_filt.h5',
