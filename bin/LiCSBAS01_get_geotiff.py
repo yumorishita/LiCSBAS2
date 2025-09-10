@@ -59,7 +59,7 @@ def main(argv=None):
         argv = sys.argv
         
     start = time.time()
-    ver='1.6.5'; date=20240607; author="Y. Morishita"
+    ver='1.7.0'; date=20250907; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -191,20 +191,17 @@ def main(argv=None):
             if np.mod(i, 10) == 0:
                 print("\r  {0:3}/{1:3}".format(i, len(_imdates)), end='', flush=True)
             url_epoch = os.path.join(url, imd, '')
-            response = requests.get(url_epoch)
-            response.encoding = response.apparent_encoding #avoid garble
-            html_doc = response.text
-            soup = BeautifulSoup(html_doc, "html.parser")
-            tag = soup.find(href=re.compile(r"\d{8}.geo.mli.tif"))
-            if tag is not None:
+            url_mli = os.path.join(url_epoch, imd+'.geo.mli.tif')
+            url_mli = tools_lib.extract_url_licsar(url_mli)
+            if url_mli is not None:
                 print('\n{} found as latest.'.format(imd))
                 imd1 = imd
                 break
     
         ### Download
         if imd1:
-            print('Donwnloading {}.geo.mli.tif as {}.geo.mli.tif...'.format(imd1, frameID), flush=True)
-            url_mli = os.path.join(url, imd1, imd1+'.geo.mli.tif')
+            print('Downloading {}.geo.mli.tif as {}.geo.mli.tif...'.format(imd1, frameID), flush=True)
+            url_mli = tools_lib.extract_url_licsar(url_mli)
             tools_lib.download_data(url_mli, mlitif)
         else:
             print('\nNo mli available on {}'.format(url), file=sys.stderr, flush=True)
@@ -304,7 +301,7 @@ def main(argv=None):
     imdates = tools_lib.ifgdates2imdates(ifgdates)
     print('{} IFGs available from {} to {}'.format(n_ifg, imdates[0], imdates[-1]), flush=True)
 
-    ### Check if both unw and cc already donwloaded, new, and same size
+    ### Check if both unw and cc already downloaded, new, and same size
     print('Checking existing unw and cc ({} parallel, may take time)...'.format(n_para), flush=True)
 
     ## unw
@@ -394,8 +391,9 @@ def main(argv=None):
 def download_wrapper(args):
     i, ifgd, n_dl, url_data, path_data = args
     dir_data = os.path.dirname(path_data)
-    print('  Donwnloading {} ({}/{})...'.format(ifgd, i+1, n_dl), flush=True)
+    print('  Downloading {} ({}/{})...'.format(ifgd, i+1, n_dl), flush=True)
     if not os.path.exists(dir_data): os.mkdir(dir_data)
+    url_data = tools_lib.extract_url_licsar(url_data)
     tools_lib.download_data(url_data, path_data)
     return
 
@@ -404,9 +402,9 @@ def download_wrapper(args):
 def check_exist_wrapper(args):
     """
     Returns :
-        0 : Local exist, complete, and new (no need to donwload)
-        1 : Local incomplete (need to re-donwload)
-        2 : Local old (no need to re-donwload)
+        0 : Local exist, complete, and new (no need to download)
+        1 : Local incomplete (need to re-download)
+        2 : Local old (no need to re-download)
         3 : Remote not exist  (can not compare, no download)
         4 : Local not exist (need to download)
     """
@@ -414,8 +412,9 @@ def check_exist_wrapper(args):
     i, n_data, url_data, path_data = args
     bname_data = os.path.basename(path_data)
     
-#    if np.mod(i, 10) == 0:
-#        print("  {0:3}/{1:3}".format(i, n_data), flush=True)
+    url_data = tools_lib.extract_url_licsar(url_data)
+    if not url_data:
+        return 3
 
     if os.path.exists(path_data):
         rc = tools_lib.comp_size_time(url_data, path_data)
@@ -432,9 +431,9 @@ def check_exist_wrapper(args):
 def check_gacos_wrapper(args):
     """
     Returns :
-        0 : Local exist, complete, and new (no need to donwload)
-        1 : Local incomplete (need to re-donwload)
-        2 : Local old (no need to re-donwload)
+        0 : Local exist, complete, and new (no need to download)
+        1 : Local incomplete (need to re-download)
+        2 : Local old (no need to re-download)
         3 : Remote not exist  (can not compare, no download)
         4 : Local not exist and remote exist (need to download)
         5 : Local not exist but remote not exist (can not download)
@@ -444,6 +443,10 @@ def check_gacos_wrapper(args):
     
     if np.mod(i, 10) == 0:
         print("  {0:3}/{1:3}".format(i, n_data), flush=True)
+
+    url_data = tools_lib.extract_url_licsar(url_data)
+    if not url_data:
+        return 3
 
     if os.path.exists(path_data):
         rc = tools_lib.comp_size_time(url_data, path_data)
