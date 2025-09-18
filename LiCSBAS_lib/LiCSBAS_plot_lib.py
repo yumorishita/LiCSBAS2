@@ -2,7 +2,7 @@
 """
 Python3 library of plot functions for LiCSBAS.
 
-v1.3.2 20250715 Yu Morishita
+v1.3.3 20250918 Yu Morishita
 
 """
 import os
@@ -154,41 +154,51 @@ def plot_gacos_info(gacos_infofile, pngfile):
 
 #%%
 def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
-    """
-    """
+    # Select non-NaN data
     bool_nan = np.isnan(data_bf)
-    data_af = data_bf - fit_hgt ### Correction
-    ix_hgt0 = np.nanargmin(hgt[~bool_nan])
-    ix_hgt1 = np.nanargmax(hgt[~bool_nan])
-    hgt0 = hgt[~bool_nan][ix_hgt0]
-    hgt1 = hgt[~bool_nan][ix_hgt1]
-    fit_hgt0 = fit_hgt[~bool_nan][ix_hgt0]
-    fit_hgt1 = fit_hgt[~bool_nan][ix_hgt1]
+    valid_hgt = hgt[~bool_nan]
+    valid_data_bf = data_bf[~bool_nan]
+    valid_fit_hgt = fit_hgt[~bool_nan]
 
-    ### Downsample data to plot large number of scatters fast
-    hgt_data_bf = np.stack((np.round(hgt[~bool_nan]), np.round(data_bf[~bool_nan], 1))).T  ## Round values
-    hgt_data_bf = np.unique(hgt_data_bf, axis = 0)  ## Keep only uniques
-    hgt_data_af = np.stack((np.round(hgt[~bool_nan]), np.round(data_af[~bool_nan], 1))).T  ## Round values
-    hgt_data_af = np.unique(hgt_data_af, axis = 0)  ## Keep only uniques
+    # Calculate the data after correction
+    data_af = valid_data_bf - valid_fit_hgt
 
-    ### Plot
-    figsize = (5, 4)
-    sbf, cbf, mbf, zbf, lbf = 0.2, '0.5', 'p', 4, 'Before'
-    saf, caf, maf, zaf, laf = 0.2, 'c', 'p', 6, 'After'
+    # Calculate the endpoints for the correction line
+    ix_hgt0 = np.nanargmin(valid_hgt)
+    ix_hgt1 = np.nanargmax(valid_hgt)
+    hgt0 = valid_hgt[ix_hgt0]
+    hgt1 = valid_hgt[ix_hgt1]
+    fit_hgt0 = valid_fit_hgt[ix_hgt0]
+    fit_hgt1 = valid_fit_hgt[ix_hgt1]
 
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=figsize)
+    # --- Plotting setup ---
+    # Create a 1-row, 2-column subplot to display before and after correction side-by-side
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 4), sharey=True)
+    ax1, ax2 = axes
 
-    ax.scatter(hgt_data_bf[:, 0], hgt_data_bf[:, 1], s=sbf, c=cbf, marker=mbf, zorder=zbf, label=lbf)
-    ax.scatter(hgt_data_af[:, 0], hgt_data_af[:, 1], s=saf, c=caf, marker=maf, zorder=zaf, label=laf)
-    ax.plot([hgt0, hgt1], [fit_hgt0, fit_hgt1], linewidth=2, color='k', alpha=0.8, zorder=8, label='Correction')
+    # --- Plot before correction (left side) ---
+    # Create a 2D histogram (heatmap)
+    # 'bins' determines the resolution of the histogram.
+    # cmin=1 ensures that bins with no points are not colored.
+    h1 = ax1.hist2d(valid_hgt, valid_data_bf, bins=100, cmap='viridis', cmin=1)
+    fig.colorbar(h1[3], ax=ax1, label='Point Density') # Add a colorbar
+    ax1.plot([hgt0, hgt1], [fit_hgt0, fit_hgt1], linewidth=2, color='r', alpha=0.8, zorder=8, label='Correction')
+    ax1.grid(zorder=0)
+    ax1.set_title('Before Correction', fontsize=10)
+    ax1.set_xlabel('Height (m)')
+    ax1.set_ylabel('Displacement (mm)')
+    ax1.legend(loc='upper right')
 
-    ax.grid(zorder=0)
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel('Height (m)')
-    ax.set_ylabel('Displacement (mm)')
+    # --- Plot after correction (right side) ---
+    h2 = ax2.hist2d(valid_hgt, data_af, bins=100, cmap='viridis', cmin=1)
+    fig.colorbar(h2[3], ax=ax2, label='Point Density') # Add a colorbar
+    ax2.grid(zorder=0)
+    ax2.set_title('After Correction', fontsize=10)
+    ax2.set_xlabel('Height (m)')
 
-    ax.legend(loc='upper right')
-    fig.tight_layout()
+    # Overall title and layout adjustment
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust layout to prevent suptitle overlap
     fig.savefig(pngfile)
     plt.close(fig)
 
