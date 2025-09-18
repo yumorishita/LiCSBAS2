@@ -176,6 +176,17 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 4), sharey=True)
     ax1, ax2 = axes
 
+    # Set Y-axis limits to ensure all data is visible
+    # Find the min and max across BOTH 'before' and 'after' datasets
+    ymin = min(np.min(valid_data_bf), np.min(data_af))
+    ymax = max(np.max(valid_data_bf), np.max(data_af))
+    if ymax == ymin:
+        ymax = ymax + 1
+        ymin = ymin - 1
+
+    # Add a 5% padding to the top and bottom for better visualization
+    padding = (ymax - ymin) * 0.05
+
     # --- Plot before correction (left side) ---
     # Create a 2D histogram (heatmap)
     # 'bins' determines the resolution of the histogram.
@@ -195,6 +206,7 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
     ax2.grid(zorder=0)
     ax2.set_title('After Correction', fontsize=10)
     ax2.set_xlabel('Height (m)')
+    ax2.set_ylim(ymin - padding, ymax + padding)
 
     # Overall title and layout adjustment
     fig.suptitle(title, fontsize=12)
