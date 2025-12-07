@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-bin/LiCSBAS_asf2geoc.py
-
 Convert a parent directory of ASF product folders into a LiCSBAS-style `GEOC/` layout.
 
 This script scans a parent directory for ASF product subdirectories and, for each
@@ -469,7 +467,8 @@ if __name__ == '__main__':
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     # Read args
-    p = argparse.ArgumentParser(description='Convert ASF product parent dir to LiCSBAS GEOC layout')
+    p = argparse.ArgumentParser(description='Convert ASF product parent dir to LiCSBAS GEOC layout', 
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('-i', '--indir', default='.',
                    help='Parent directory that contains ASF product subdirectories (default: .)')
     p.add_argument('-o', '--outdir', default='GEOC', help='Target GEOC directory (default: ./GEOC)')
