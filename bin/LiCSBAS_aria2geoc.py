@@ -2,18 +2,15 @@
 """
 Convert an ARIA-style parent directory into a LiCSBAS-style `GEOC/` layout.
 
-This is a simplified converter compared to the ASF converter: it assumes ARIA
-VRT inputs are already in EPSG:4326 and therefore does not perform reprojection
-or resampling. It also does not implement geographic cropping.
-
 Inputs (expected under ARIA parent dir):
-- amplitude/{yyyymmdd_yyyymmdd}.vrt    -> X.geo.mli.tif (per-frame mli)
+- stack/
+    - ampStack.vrt (amplitude/{yyyymmdd_yyyymmdd}.vrt) -> X.geo.mli.tif (per-frame mli)
+    - cohStack.vrt (coherence/{yyyymmdd_yyyymmdd}.vrt) -> cc
+    - unwrapStack.vrt (unwrappedPhase/{yyyymmdd_yyyymmdd}.vrt) -> unw
+      (contains metadata including `Wavelength (m)` used to derive radar frequency)
 - azimuthAngle/{yyyymmdd_yyyymmdd}.vrt -> lv_phi equivalent
 - incidenceAngle/{yyyymmdd_yyyymmdd}.vrt -> lv_theta equivalent
-- coherence/{yyyymmdd_yyyymmdd}.vrt    -> cc
-- unwrappedPhase/{yyyymmdd_yyyymmdd}.vrt -> unw
 - DEM/glo_90.dem.vrt                   -> hgt
-- products/*.nc                         -> used to parse center_time (hhmmss in filename)
 
 Outputs:
 - GEOC/{yyyymmdd_yyyymmdd}/{yyyymmdd_yyyymmdd}.geo.unw.tif
@@ -21,7 +18,7 @@ Outputs:
 - GEOC/X.geo.E.tif, X.geo.N.tif, X.geo.U.tif (computed from azimuth/incidence)
 - GEOC/X.geo.hgt.tif
 - GEOC/X.geo.mli.tif
-- GEOC/metadata.txt (center_time from products filenames, radar_freq fixed)
+- GEOC/metadata.txt (center_time and radar_freq from stack metadata)
 
 """
 
@@ -67,27 +64,126 @@ def write_geotiff(path, arr, gt, proj, dtype=gdal.GDT_Float32, nodata=0.0, optio
     outds = None
 
 
-def parse_center_time_from_products(products_dir, date_key=None):
-    """Search products for a filename that contains date_key and extract hhmmss.
-    If date_key is None, use the first product file found.
-    Returns time string 'HH:MM:SS' or None.
+def _keys_from_stack(vrt_path):
+    """Return a list of date keys found in the band metadata of *vrt_path*.
+
+    The ARIA stack VRTs store per-band metadata with a key named ``Dates``
+    containing the IFG identifier.  We use this to enumerate all available
+    interferograms without touching the individual subdirectories.
     """
-    if not os.path.isdir(products_dir):
-        return None
-    files = sorted([os.path.basename(p) for p in glob.glob(os.path.join(products_dir, '*'))])
-    for fn in files:
-        if date_key and date_key not in fn:
-            continue
-        # look for a 6-digit time like -204350- or _204350_
-        m = re.search(r'[-_](\d{6})[-_]', fn)
-        if m:
-            hhmmss = m.group(1)
-            hh = hhmmss[0:2]; mm = hhmmss[2:4]; ss = hhmmss[4:6]
-            return f"{hh}:{mm}:{ss}"
+    ks = []
+    if os.path.exists(vrt_path):
+        ds = gdal.Open(vrt_path)
+        if ds is not None:
+            for ib in range(1, ds.RasterCount + 1):
+                band = ds.GetRasterBand(ib)
+                # look through all domains until we find a Dates entry
+                for dom in band.GetMetadataDomainList() or []:
+                    md = band.GetMetadata(dom)
+                    if 'Dates' in md:
+                        ks.append(md['Dates'])
+                        break
+            ds = None
+    return ks
+
+
+def _canonical_ifg_key(key):
+    """Return a normalized key with the earlier date first.
+
+    ARIA-style keys are sometimes stored with the later date first (``y2_y1``)
+    whereas many workflows (including the LiCSBAS GEOC layout) conventionally
+    use the earlier date first (``y1_y2``).  We cannot rely on the input
+    order, so this helper takes an IFG key
+    and, when it looks like two eight-digit dates separated by an underscore,
+    it returns a string with the two dates sorted in chronological order.  If
+    the key does not match that simple pattern it is returned unchanged.
+
+    This function is used both for sorting the list of keys we process and for
+    constructing the output directory/file names.
+    """
+
+    parts = key.split('_', 1)
+    if len(parts) == 2:
+        try:
+            d0 = datetime.datetime.strptime(parts[0], '%Y%m%d')
+            d1 = datetime.datetime.strptime(parts[1], '%Y%m%d')
+        except ValueError:
+            # not two parseable dates, just return the original key
+            return key
+        # assemble with earlier date first
+        if d0 <= d1:
+            return f"{parts[0]}_{parts[1]}"
+        else:
+            return f"{parts[1]}_{parts[0]}"
+    return key
+
+
+def _open_band(stack_path, key):
+    """Open *stack_path* and return the dataset plus band index for *key*.
+
+    If the stack VRT exists and contains a band whose ``Dates`` metadata
+    matches *key* the dataset object and the 1-based band number are
+    returned.  Otherwise ``(None, None)`` is returned.
+    """
+    if os.path.exists(stack_path):
+        ds = gdal.Open(stack_path)
+        if ds is not None:
+            for ib in range(1, ds.RasterCount + 1):
+                band = ds.GetRasterBand(ib)
+                for dom in band.GetMetadataDomainList() or []:
+                    md = band.GetMetadata(dom)
+                    if md.get('Dates') == key:
+                        return ds, ib
+            ds = None
+    return None, None
+
+
+def _wavelength_from_stack(vrt_path):
+    """Return the first wavelength value (in metres) found in *vrt_path*.
+
+    ARIA stack VRTs include a metadata field ``Wavelength (m)`` in the
+    interferogram-domain metadata for each band.  We inspect the first band
+    and return the float value, or ``None`` if it cannot be determined.
+    """
+    if os.path.exists(vrt_path):
+        ds = gdal.Open(vrt_path)
+        if ds is not None and ds.RasterCount >= 1:
+            band = ds.GetRasterBand(1)
+            for dom in band.GetMetadataDomainList() or []:
+                md = band.GetMetadata(dom)
+                if 'Wavelength (m)' in md:
+                    try:
+                        return float(md['Wavelength (m)'])
+                    except ValueError:
+                        pass
+            ds = None
     return None
 
 
-def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
+def _utc_time_from_stack(vrt_path):
+    """Return the UTC time string found in the first band metadata of *vrt_path*.
+
+    ARIA stack VRTs include a metadata field ``UTCTime (HH:MM:SS.ss)`` in the
+    interferogram-domain metadata for each band.  We inspect the first band
+    and return the time (truncated to HH:MM:SS), or ``None`` if it cannot be determined.
+    """
+    if os.path.exists(vrt_path):
+        ds = gdal.Open(vrt_path)
+        if ds is not None and ds.RasterCount >= 1:
+            band = ds.GetRasterBand(1)
+            for dom in band.GetMetadataDomainList() or []:
+                md = band.GetMetadata(dom)
+                if 'UTCTime (HH:MM:SS.ss)' in md:
+                    utc_str = md['UTCTime (HH:MM:SS.ss)']
+                    # extract HH:MM:SS part (first 8 chars)
+                    if len(utc_str) >= 8:
+                        return utc_str[:8]
+                    return utc_str
+            ds = None
+    return None
+
+
+def main(indir='.', outdir='GEOC', cc_thresh=None, overwrite=False):
     indir = os.path.abspath(indir)
     if not os.path.isdir(indir):
         raise FileNotFoundError(f"{indir} not found")
@@ -95,52 +191,70 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
     out_geoc = os.path.abspath(outdir)
     os.makedirs(out_geoc, exist_ok=True)
 
-    # expected ARIA subfolders
-    amp_dir = os.path.join(indir, 'amplitude')
+    # expected ARIA subfolders.  amplitude/coherence/unwrappedPhase data are
+    # read via the stack VRT files; azimuth/incidence/DEM are read directly.
+    stack_dir = os.path.join(indir, 'stack')
     az_dir = os.path.join(indir, 'azimuthAngle')
     inc_dir = os.path.join(indir, 'incidenceAngle')
-    coh_dir = os.path.join(indir, 'coherence')
-    unw_dir = os.path.join(indir, 'unwrappedPhase')
     dem_dir = os.path.join(indir, 'DEM')
-    products_dir = os.path.join(indir, 'products')
 
-    # collect available date keys from unwrappedPhase VRTs
-    date_keys = []
-    if os.path.isdir(unw_dir):
-        for p in glob.glob(os.path.join(unw_dir, '*.vrt')):
-            bn = os.path.basename(p)
-            key = bn.replace('.vrt', '')
-            date_keys.append(key)
-    date_keys = sorted(list(dict.fromkeys(date_keys)))
+    # convenience paths for stack-based VRTs; may not all exist but we will
+    # try to open them when needed.
+    amp_stack = os.path.join(stack_dir, 'ampStack.vrt')
+    coh_stack = os.path.join(stack_dir, 'cohStack.vrt')
+    unw_stack = os.path.join(stack_dir, 'unwrapStack.vrt')
+
+    # determine the list of IFG keys exclusively from the unwrappedPhase
+    # stack VRT.  absence of a valid stack is considered an error.
+    date_keys = _keys_from_stack(unw_stack)
     if not date_keys:
-        raise FileNotFoundError('No unwrappedPhase VRTs found in ARIA directory')
+        raise FileNotFoundError('No unwrappedPhase stack VRTs found in ARIA directory')
+    # sort according to canonical ordering so earliest IFG is first regardless
+    # of whether the input key was ``y1_y2`` or ``y2_y1``
+    date_keys = sorted(date_keys, key=_canonical_ifg_key)
+
+    # Determine coherence threshold based on Satellite.
+    wl = _wavelength_from_stack(unw_stack)
+    # Estimate satellite from wavelength: C-band <= 0.1m, else L-band
+    is_cband = (wl is None) or (wl > 0 and wl <= 0.1)
+    
+    if cc_thresh is None:
+        if is_cband:
+            cc_thresh = 0.5  # Sentinel-1 default because of filtered coherence
+        else:
+            cc_thresh = 0.2  # NISAR default because of unfiltered coherence
+        print(f'Auto-detected cc_thresh={cc_thresh} (wavelength={wl}m if known)')
+    else:
+        print(f'Using user-specified cc_thresh={cc_thresh}')
 
     print(f'Found {len(date_keys)} IFGs to process')
 
     processed_any = False
     for key in date_keys:
         print(f'Processing {key}...')
-        src_unw = find_vrt(unw_dir, key)
-        src_cc = find_vrt(coh_dir, key)
-        if not (src_unw and src_cc):
+        # open the required IFG bands from the stacks; missing bands are
+        # reported and the IFG is skipped.
+        ds_unw, band_unw = _open_band(unw_stack, key)
+        ds_cc, band_cc = _open_band(coh_stack, key)
+        if not (ds_unw and ds_cc):
             print(f'  WARN: missing unw or cc for {key}. Skipping')
+            if ds_unw:
+                ds_unw = None
+            if ds_cc:
+                ds_cc = None
             continue
 
-        # open unw and cc (inputs are assumed to be in EPSG:4326 already)
-        ds_unw = gdal.Open(src_unw)
-        ds_cc = gdal.Open(src_cc)
-        if ds_unw is None or ds_cc is None:
-            print(f'  ERROR opening datasets for {key}. Skipping')
-            continue
-
-        unw_arr = ds_unw.ReadAsArray().astype(np.float32)
-        cc_arr = ds_cc.ReadAsArray().astype(np.float32)
+        unw_arr = ds_unw.GetRasterBand(band_unw).ReadAsArray().astype(np.float32)
+        cc_arr = ds_cc.GetRasterBand(band_cc).ReadAsArray().astype(np.float32)
         # scale cc if 0-255
         if np.nanmax(cc_arr) > 1.5:
             cc_arr = cc_arr / 255.0
 
-        # ARIA unwrappedPhase uses opposite sign compared to GEOC/ASF: flip sign
-        unw_arr = -1.0 * unw_arr
+        # ARIA unwrappedPhase uses opposite sign compared to GEOC/ASF
+        # Sentinel-1 (C-band): apply sign flip
+        # NISAR (L-band): no sign flip needed
+        if is_cband:
+            unw_arr = -1.0 * unw_arr
 
         mask = (cc_arr < cc_thresh) | np.isnan(cc_arr)
         unw_arr[mask] = 0.0
@@ -148,13 +262,11 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
         gt = ds_unw.GetGeoTransform()
         proj = ds_unw.GetProjection()
 
-        # ARIA date key is reversed relative to GEOC/ASF (ARIA: y2_y1). Swap
-        # order for GEOC output names so they become y1_y2.
-        parts = key.split('_', 1)
-        if len(parts) == 2:
-            out_key = f"{parts[1]}_{parts[0]}"
-        else:
-            out_key = key
+        # construct output key with earlier date first; this handles both the
+        # traditional ``y2_y1`` ordering and the reversed ``y1_y2`` form.
+        # ``_canonical_ifg_key`` will leave other
+        # non-date-like keys untouched.
+        out_key = _canonical_ifg_key(key)
 
         # create IFG folder with swapped date order
         tgt_dir = os.path.join(out_geoc, out_key)
@@ -205,6 +317,11 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
         U[nz] = U[nz] / norm[nz]
         E[mask] = 0.0; N[mask] = 0.0; U[mask] = 0.0
 
+        if not is_cband:
+            # For left-lokking NISAR/L-band
+            E = -1.0 * E
+            N = -1.0 * N
+
         gt_phi = ds_phi.GetGeoTransform()
         proj_phi = ds_phi.GetProjection()
 
@@ -215,13 +332,17 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
     else:
         print('WARN: azimuthAngle or incidenceAngle missing for top-level ENU creation')
 
-    # mli: amplitude first_key
-    src_mli = find_vrt(amp_dir, first_key)
-    if src_mli:
-        ds_m = gdal.Open(src_mli)
-        mli_arr = ds_m.ReadAsArray().astype(np.float32)
-        write_geotiff(os.path.join(out_geoc, f"{frameid}.geo.mli.tif"), mli_arr, ds_m.GetGeoTransform(), ds_m.GetProjection())
+    # mli: read the first-band of the amplitude stack.  if it's missing we
+    # just warn since we already processed IFGs above.
+    src_mli_ds, band_mli = _open_band(amp_stack, first_key)
+    if src_mli_ds:
+        mli_arr = src_mli_ds.GetRasterBand(band_mli).ReadAsArray().astype(np.float32)
+        write_geotiff(os.path.join(out_geoc, f"{frameid}.geo.mli.tif"),
+                      mli_arr,
+                      src_mli_ds.GetGeoTransform(),
+                      src_mli_ds.GetProjection())
         print('Wrote mli')
+        src_mli_ds = None
     else:
         print('WARN: amplitude mli not found for top-level mli')
 
@@ -239,20 +360,30 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.5, overwrite=False):
     else:
         print('WARN: DEM not found for top-level hgt')
 
-    # metadata: parse center_time from products
-    center_time = parse_center_time_from_products(products_dir, first_key)
+    # metadata: read center_time and radar_freq from stack metadata
+    center_time = _utc_time_from_stack(unw_stack)
+    # compute radar frequency from wavelength (already read above)
+    radar_freq = None
+    if wl and wl > 0:
+        c = 2.99792458e8  # speed of light m/s
+        radar_freq = c / wl
+    if radar_freq is None:
+        # fall back to default sentinel-1 frequency
+        radar_freq = 5.405e9
+        print('WARN: could not determine wavelength from stack; using default radar_freq')
+
     metadata_path = os.path.join(out_geoc, 'metadata.txt')
     with open(metadata_path, 'w') as mf:
         if center_time:
             mf.write(f"center_time={center_time}\n")
-        mf.write('radar_freq=5.405e9\n')
+        mf.write(f"radar_freq={radar_freq}\n")
     print(f'Wrote metadata: {metadata_path}')
 
 
 if __name__ == '__main__':
     start = time.time()
     prog = os.path.basename(sys.argv[0])
-    print(f"\n{prog} ver1.0.0 20251204 Y. Morishita")
+    print(f"\n{prog} ver2.0.0 20260312 Y. Morishita")
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     # Show argparse defaults in help messages
@@ -260,7 +391,7 @@ if __name__ == '__main__':
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('-i', '--indir', default='.', help='ARIA parent directory')
     p.add_argument('-o', '--outdir', default='GEOC', help='Target GEOC directory')
-    p.add_argument('-t', '--cc_thresh', type=float, default=0.5, help='Coherence threshold for masking unw')
+    p.add_argument('-t', '--cc_thresh', type=float, default=None, help='Coherence threshold for masking unw; 0.5 for S1 filtered coherence, 0.2 for NISAR unfiltered coherence')
     p.add_argument('--overwrite', action='store_true', help='Overwrite existing outputs')
     args = p.parse_args()
 
