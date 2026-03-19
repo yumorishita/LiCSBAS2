@@ -25,9 +25,11 @@ def main(cumfile='cum_filt.h5',
         outcsv='cum_filt.csv',
         refarea=None,
         refarea_geo=None,
+        noref=False,
         nomask=False,
         crop_str=None,
-        crop_geo_str=None):
+        crop_geo_str=None,
+        ref_date=None):
 
 
     # %% Read cumfile
@@ -46,7 +48,9 @@ def main(cumfile='cum_filt.h5',
 
 
     # %% Set ref area
-    if refarea:
+    if noref:
+        refx1, refx2, refy1, refy2 = 0, 0, 0, 0
+    elif refarea:
         if not tools_lib.read_range(refarea, width, length):
             raise ValueError(f'ERROR with -r {refarea}')
         refx1, refx2, refy1, refy2 = tools_lib.read_range(refarea, width, length)
@@ -93,15 +97,29 @@ def main(cumfile='cum_filt.h5',
         crop_x1, crop_x2, crop_y1, crop_y2 = 0, width, 0, length
 
 
+    # %% Reference date for time series subtraction
+    if not ref_date:
+        ix_m = 0
+    elif not ref_date in imdates:
+        print(f'No {ref_date} found in dates. Set reference to {imdates[0]}')
+        ix_m = 0
+    else:
+        print(f'Reference date set to {ref_date}')
+        ix_m = imdates.index(ref_date)
+
+
     # %% Compute reference values
-    ts_ref = np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1,2))
+    if noref:
+        ts_ref = 0
+    else:
+        ts_ref = np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1,2))
 
 
     # %% Output csv for each point
     with open(outcsv, 'w') as f:
         # Write header
         header = ['latitude', 'longitude', 'velocity', 'line', 'pixel']
-        header += noise_names
+        header += noise_names_exist
         header += imdates
         f.write(','.join(header) + '\n')
 
@@ -133,7 +151,7 @@ def main(cumfile='cum_filt.h5',
                 # Time series (ref area subtraction)
                 ts = cum[:, y, x]
                 ts_dif = ts - ts_ref
-                ts_dif = ts_dif - ts_dif[0]
+                ts_dif = ts_dif - ts_dif[ix_m]
                 ts_vals = [f'{ts_dif[i]:.1f}' if not np.isnan(ts_dif[i]) else '' for i in range(n_im)]
 
                 # Write row
@@ -155,25 +173,29 @@ if __name__ == "__main__":
     addarg('-r', '--refarea', default=None, help='Reference area x1:x2/y1:y2')
     addarg('--ref_geo', default=None,
            help='Reference area in geographical coordinates lon1/lon2/lat1/lat2')
+    addarg('--noref', action='store_true', help='Do not apply spatial reference area subtraction')
     addarg('--nomask', action='store_true', help='Do not apply mask')
     addarg('--crop', default=None, help='Crop area x1:x2/y1:y2')
     addarg('--crop_geo', default=None,
            help='Crop area in geographical coordinates lon1/lon2/lat1/lat2')
+    addarg('--ref_date', default=None, help='Reference date for time series subtraction (format: YYYYMMDD) (default: first date)')
 
     args = parser.parse_args()
 
     start = time.time()
     prog = os.path.basename(sys.argv[0])
-    print(f"\n{prog} ver1.0.0 20250910 Y. Morishita")
+    print(f"\n{prog} ver1.0.1 20260319 Y. Morishita")
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     main(args.input,
         args.output,
         args.refarea,
         args.ref_geo,
+        args.noref,
         args.nomask,
         args.crop,
-        args.crop_geo)
+        args.crop_geo,
+        args.ref_date)
 
     # Finish
     elapsed_time = datetime.timedelta(seconds=(time.time()-start))
