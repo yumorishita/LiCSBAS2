@@ -108,7 +108,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.3"; date=20250715; author="Y. Morishita"
+    ver="1.5.4"; date=20260320; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -543,7 +543,7 @@ def main(argv=None):
 
             if gpu:
                 print('  using GPU...', flush=True)
-                n_loop, _ = Aloop.shape
+                n_loop = Aloop.shape[0]
                 unwpatch_cp = cp.asarray(unwpatch)
                 G_cp = cp.asarray(G)
                 Aloop_cp = cp.asarray(Aloop)
@@ -853,7 +853,11 @@ def count_gaps_wrapper(i):
     print("    Running {:2}/{:2}th patch...".format(i+1, n_para_gap), flush=True)
     n_pt_patch = int(np.ceil(unwpatch.shape[0]/n_para_gap))
     n_im = G.shape[1]+1
-    n_loop, n_ifg = Aloop.shape
+    if Aloop:
+        n_loop, n_ifg = Aloop.shape
+    else:
+        n_loop = 0
+        n_ifg = 0
 
     if i*n_pt_patch >= unwpatch.shape[0]:
         # Nothing to do

@@ -96,6 +96,7 @@ p11_GEOCmldir=""	# default: $GEOCmldir
 p11_TSdir=""	# default: TS_$GEOCmldir
 p12_GEOCmldir=""        # default: $GEOCmldir
 p12_TSdir=""    # default: TS_$GEOCmldir
+p12_skip_if_noloop="n"	# y/n. default: n
 p12_n_para=""	# default: # of usable CPU-1
 p13_GEOCmldir=""        # default: $GEOCmldir
 p13_TSdir=""    # default: TS_$GEOCmldir
@@ -283,6 +284,7 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
   if [ $p12_multi_prime == "y" ];then p12_op="$p12_op --multi_prime"; fi
   if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
   if [ $p12_rm_noloop_ifg == "y" ];then p12_op="$p12_op --rm_noloop_ifg"; fi
+  if [ $p12_skip_if_noloop == "y" ];then p12_op="$p12_op --skip_if_noloop"; fi
   if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
   elif [ ! -z $n_para ];then p12_op="$p12_op --n_para $n_para";fi
 

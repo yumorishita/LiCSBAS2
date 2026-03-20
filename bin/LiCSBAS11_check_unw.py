@@ -64,7 +64,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.4"; date=20250529; author="Y. Morishita"
+    ver="1.3.5"; date=20260320; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -181,7 +181,12 @@ def main(argv=None):
         n_unw += ~np.isnan(unw) # Summing number of unnan unw
 
     ## Identify valid area and calc rate_cov
-    bool_valid = (n_unw>=n_im)
+    if np.all(n_unw<n_im):
+        n_unw_thres = n_unw.max()
+        print(f'\nWARNING: No pixel has n_unw>=n_im! Set unw_cov_thre to {n_unw_thres}.', flush=True)
+    else:
+        n_unw_thres = n_im
+    bool_valid = (n_unw>=n_unw_thres)
     n_unw_valid = bool_valid.sum()
 
     ## Read cc and unw data
@@ -262,11 +267,11 @@ def main(argv=None):
             except:
                 shutil.copy(rasorg, bad_ifg_rasdir)
         else:
-            try:               
+            try:
                 os.symlink(os.path.relpath(rasorg, ifg_rasdir),
                            os.path.join(ifg_rasdir, rasname))
             except:
-                shutil.copy(rasorg, ifg_rasdir)                
+                shutil.copy(rasorg, ifg_rasdir)
             rm_flag = ''
 
         ### For stats file
