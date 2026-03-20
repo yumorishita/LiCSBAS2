@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 This script identifies bad unw by checking loop closure.
 A preliminary reference point that has all valid unw data and the smallest RMS
@@ -91,7 +92,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.4"; date=20250715; author="Y. Morishita"
+    ver="1.6.5"; date=20260320; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -105,6 +106,7 @@ def main(argv=None):
     multi_prime = False
     rm_ifg_list = []
     rm_noloop_ifg = False
+    skip_if_noloop = False
 
     try:
         n_para = max(len(os.sched_getaffinity(0))-1, 1)
@@ -122,7 +124,7 @@ def main(argv=None):
         try:
             opts, args = getopt.getopt(argv[1:], "hd:t:l:",
                                        ["help", "multi_prime", "rm_ifg_list=",
-                                        "rm_noloop_ifg", "n_para="])
+                                        "rm_noloop_ifg", "skip_if_noloop", "n_para="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -141,6 +143,8 @@ def main(argv=None):
                 rm_ifg_list = a
             elif o == '--rm_noloop_ifg':
                 rm_noloop_ifg = True
+            elif o == '--skip_if_noloop':
+                skip_if_noloop = True
             elif o == '--n_para':
                 n_para = int(a)
 
@@ -246,6 +250,57 @@ def main(argv=None):
     ### Get loop matrix
     Aloop = loop_lib.make_loop_matrix(ifgdates)
     n_loop = Aloop.shape[0]
+
+    # Handle if no loop
+    if n_loop == 0:
+        print("\nNo loop exists in the network!", flush=True)
+        if skip_if_noloop:
+            print("\nSkip loop closure check.", flush=True)
+
+            # Make output files
+            # coh_avg, n_unw, and n_loop_err
+            coh_avg = calc_coh_avg(ifgdates)
+            n_unw = calc_n_unw(ifgdates)
+            ns_loop_err = np.zeros((length, width), dtype=np.float32)
+
+            n_unwfile = os.path.join(resultsdir, 'n_unw')
+            np.float32(n_unw).tofile(n_unwfile)
+            coh_avgfile = os.path.join(resultsdir, 'coh_avg')
+            coh_avg.tofile(coh_avgfile)
+            n_loop_errfile = os.path.join(resultsdir, 'n_loop_err')
+            ns_loop_err.tofile(n_loop_errfile)
+
+            # Save png
+            title = 'Average coherence'
+            plot_lib.make_im_png(coh_avg, coh_avgfile+'.png', cmap_noise, title)
+            title = 'Number of used unw data'
+            plot_lib.make_im_png(n_unw, n_unwfile+'.png', cmap_noise, title, n_im)
+            title = 'Number of unclosed loops'
+            plot_lib.make_im_png(ns_loop_err, n_loop_errfile+'.png', cmap_noise_r, title)
+
+            # 12ref.txt. Find a pixel with max n_unw and cc_ave
+            reffile = os.path.join(infodir, '12ref.txt')
+            refy1 = np.where(n_unw==np.nanmax(n_unw))[0][0] # start from 0, not 1
+            refx1 = np.where(n_unw==np.nanmax(n_unw))[1][0] # start from 0, not 1
+            refx2=refx1+1; refy2=refy1+1
+            with open(reffile, 'w') as f:
+                print(f'{refx1}:{refx2}/{refy1}:{refy2}', file=f)
+
+            # Create blank files
+            for file in ['12removed_image.txt', '12bad_ifg.txt',
+                         '12network_gap_info.txt', '12no_loop_ifg.txt']:
+                 with open(os.path.join(infodir, file), 'w') as f:
+                     f.write("")
+
+            # Copy network11_nobad.png
+            shutil.copy(os.path.join(netdir, 'network11_nobad.png'), os.path.join(netdir, 'network12_all.png'))
+            shutil.copy(os.path.join(netdir, 'network11_nobad.png'), os.path.join(netdir, 'network12.png'))
+            shutil.copy(os.path.join(netdir, 'network11_nobad.png'), os.path.join(netdir, 'network12_nobad.png'))
+
+            return 0
+        else:
+            print("\nChange parameters in step11 or add ifgs to make loops.", flush=True)
+            return 1
 
     ### Extract no loop ifgs
     ns_loop4ifg = np.abs(Aloop).sum(axis=0)
@@ -537,30 +592,8 @@ def main(argv=None):
     #%% Saving coh_avg, n_unw, and n_loop_err only for good ifgs
     print('\nSaving coh_avg, n_unw, and n_loop_err...', flush=True)
     ### Calc coh avg and n_unw
-    coh_avg = np.zeros((length, width), dtype=np.float32)
-    n_coh = np.zeros((length, width), dtype=np.int16)
-    n_unw = np.zeros((length, width), dtype=np.int16)
-    for ifgd in ifgdates_good:
-        ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
-        if os.path.getsize(ccfile) == length*width:
-            coh = io_lib.read_img(ccfile, length, width, np.uint8)
-            coh = coh.astype(np.float32)/255
-        else:
-            coh = io_lib.read_img(ccfile, length, width)
-            coh[np.isnan(coh)] = 0 # Fill nan with 0
-
-        coh_avg += coh
-        n_coh += (coh!=0)
-
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
-        unw = io_lib.read_img(unwfile, length, width)
-
-        unw[unw == 0] = np.nan # Fill 0 with nan
-        n_unw += ~np.isnan(unw) # Summing number of unnan unw
-
-    coh_avg[n_coh==0] = np.nan
-    n_coh[n_coh==0] = 1 #to avoid zero division
-    coh_avg = coh_avg/n_coh
+    coh_avg = calc_coh_avg(ifgdates_good)
+    n_unw = calc_n_unw(ifgdates_good)
 
     ### Save files
     n_unwfile = os.path.join(resultsdir, 'n_unw')
@@ -856,6 +889,40 @@ def loop_closure_4th_wrapper(args):
         ns_loop_err1 = ns_loop_err1+(np.abs(loop_ph)>np.pi) #suspected unw error
 
     return ns_loop_err1
+
+
+# %%
+def calc_coh_avg(_ifgdates):
+    coh_avg = np.zeros((length, width), dtype=np.float32)
+    n_coh = np.zeros((length, width), dtype=np.int16)
+    for ifgd in _ifgdates:
+        ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+        if os.path.getsize(ccfile) == length*width:
+            coh = io_lib.read_img(ccfile, length, width, np.uint8)
+            coh = coh.astype(np.float32)/255
+        else:
+            coh = io_lib.read_img(ccfile, length, width)
+            coh[np.isnan(coh)] = 0 # Fill nan with 0
+
+        coh_avg += coh
+        n_coh += (coh!=0)
+
+    coh_avg[n_coh==0] = np.nan
+    n_coh[n_coh==0] = 1 #to avoid zero division
+    coh_avg = coh_avg/n_coh
+
+    return coh_avg
+
+def calc_n_unw(_ifgdates):
+    n_unw = np.zeros((length, width), dtype=np.int16)
+    for ifgd in ifgdates:
+        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        unw = io_lib.read_img(unwfile, length, width)
+
+        unw[unw == 0] = np.nan # Fill 0 with nan
+        n_unw += ~np.isnan(unw) # Summing number of unnan unw
+
+    return n_unw
 
 
 #%% main
