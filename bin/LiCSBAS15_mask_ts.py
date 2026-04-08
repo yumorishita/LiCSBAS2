@@ -9,7 +9,7 @@ Inputs in TS_GEOCml*/ :
  - results/[vel, coh_avg, n_unw, vstd, maxTlen, n_gap, stc,
             n_ifg_noloop, n_loop_err, resid_rms]
  - info/13parameters.txt
- 
+
 Outputs in TS_GEOCml*/
  - mask_ts[_mskd].png : Quick-look image of mask and noise indices
  - results/
@@ -41,11 +41,11 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
                  (Default: do auto adjust)
- 
+
  Default thresholds for L-band:
    C-band : -c 0.05 -u 1.5 -v 100 -T 1 -g 10 -s 5  -i 50 -l 5 -r 2
    L-band : -c 0.01 -u 1   -v 200 -T 1 -g 1  -s 10 -i 50 -l 1 -r 10
- 
+
 """
 
 #%% Import
@@ -54,17 +54,20 @@ import os
 os.environ['QT_QPA_PLATFORM']='offscreen'
 import sys
 import time
-import numpy as np
-import SCM
-import LiCSBAS_io_lib as io_lib
-import LiCSBAS_plot_lib as plot_lib
-
 import warnings
+
 import matplotlib
 with warnings.catch_warnings(): ## To silence user warning
     warnings.simplefilter('ignore', UserWarning)
     matplotlib.use('Agg')
 from matplotlib import pyplot as plt
+import numpy as np
+import h5py as h5
+
+import LiCSBAS_io_lib as io_lib
+import LiCSBAS_plot_lib as plot_lib
+import SCM
+
 plt.rcParams['axes.titlesize'] = 10
 
 class Usage(Exception):
@@ -85,13 +88,13 @@ def add_subplot(fig, i, data, vmin, vmax, cmap, title):
 
 #%% Main
 def main(argv=None):
-   
+
     #%% Check argv
     if argv == None:
         argv = sys.argv
-        
+
     start = time.time()
-    ver="1.8.1"; date=20200911; author="Y. Morishita"
+    ver="1.8.2"; date=20260408; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -103,11 +106,11 @@ def main(argv=None):
     vmax = []
     keep_isolated = False
     auto_adjust = True
-    
+
     cmap_vel = SCM.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    
+
     #%% Read options
     try:
         try:
@@ -159,7 +162,7 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
- 
+
 
     #%% Directory and file setting and get info
     tsadir = os.path.abspath(tsadir)
@@ -174,7 +177,7 @@ def main(argv=None):
 
     names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms'] ## noise indices
     gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt'] ## > or <
-    ## gt: greater values than thre are masked 
+    ## gt: greater values than thre are masked
     ## lt: more little values than thre are masked (coh_avg, n_unw, maxTlen)
 
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
@@ -187,7 +190,7 @@ def main(argv=None):
 
     n_im = int(io_lib.get_param_par(inparmfile, 'n_im'))
 
-    
+
     #%% Determine default thretholds depending on frequency band
     if not 'maxTlen' in thre_dict: thre_dict['maxTlen'] = 1
     if not 'n_ifg_noloop' in thre_dict: thre_dict['n_ifg_noloop'] = 50
@@ -208,10 +211,10 @@ def main(argv=None):
         if not 'stc' in thre_dict: thre_dict['stc'] = 5
         if not 'n_loop_err' in thre_dict: thre_dict['n_loop_err'] = 5
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 2
-    
+
     thre_dict['n_unw'] = int(n_im*thre_dict['n_unw_r'])
 
-    
+
     #%% Read data
     velfile = os.path.join(resultsdir,'vel')
     vel = io_lib.read_img(velfile, length, width)
@@ -231,13 +234,13 @@ def main(argv=None):
     else:
         ## Give stc_thre to remove isolated pixels
         data_dict['stc'][np.isnan(data_dict['stc'])] = thre_dict['stc']+1
-        
+
 
     #%% Make mask
     ### Evaluate only valid pixels in vel
     mask_pt = np.ones_like(vel)[~bool_nan]
     mskd_rate = []
-    
+
     for i, name in enumerate(names):
         _data = data_dict[name][~bool_nan]
         _thre = thre_dict[name]
@@ -265,7 +268,7 @@ def main(argv=None):
             _mask_pt = (_data <= _thre) # nan returns false
         mskd_rate.append((1-_mask_pt.sum()/n_pt_all)*100)
         mask_pt = mask_pt*_mask_pt
-    
+
     ### Make total mask
     mask = np.ones_like(vel)*np.nan
     mask[~bool_nan] = mask_pt  #1:valid, 0:masked, nan:originally nan
@@ -274,7 +277,7 @@ def main(argv=None):
     ### Apply mask
     vel_mskd = vel*mask
     vel_mskd[mask==0] = np.nan
-        
+
     ### Count total mask
     n_nomask = int(np.nansum(mask))
     rate_nomask = n_nomask/n_pt_all*100
@@ -309,9 +312,9 @@ def main(argv=None):
             vmin = np.nanpercentile(vel, 1)
     if not vmax: ## auto
         vmax = np.nanpercentile(vel_mskd, 99)
-        if np.isnan(vmax): ## In case no data in vel_mskd 
+        if np.isnan(vmax): ## In case no data in vel_mskd
             vmax = np.nanpercentile(vel, 1)
-        
+
 
     #%% Output thumbnail png
     if length > width:
@@ -322,7 +325,7 @@ def main(argv=None):
         figsize_x = 12
         figsize_y = int((figsize_x)/4*3*length/width)
         if figsize_y < 4: figsize_y = 4
-    
+
     fig = plt.figure(figsize = (figsize_x, figsize_y))
     fig2 = plt.figure(figsize = (figsize_x, figsize_y))
 
@@ -332,7 +335,7 @@ def main(argv=None):
     vmins = [vmin, vmin, 0]
     vmaxs = [vmax, vmax, 1]
     cmaps = [cmap_vel, cmap_vel, cmap_noise]
-    for i in range(3): 
+    for i in range(3):
         add_subplot(fig, i, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i])
         i2 = 0 if i==1 else 1 if i==0 else 2 # inv vel and vel.mskd
         add_subplot(fig2, i2, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i])
@@ -346,7 +349,7 @@ def main(argv=None):
         ## Mask nan in vel for each indeces except coh_avg and n_unw
         if not name == 'coh_avg' and not name == 'n_unw':
             data[bool_nan] = np.nan
-        
+
         if gt_lt[i] == 'lt': ## coh_avg, n_unw, maxTlen
             cmap = cmap_noise
             vmin_n = thre_dict[name]*0.8
@@ -360,16 +363,16 @@ def main(argv=None):
         add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
         add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
         #i+3 because 3 data already plotted
-              
+
 
     fig.tight_layout()
     fig.savefig(maskts_png)
     fig2.tight_layout()
     fig2.savefig(maskts2_png)
-    
+
 #    plt.close(fig=fig)
 
-    
+
     #%% Output vel.mskd and mask
     velmskdfile = os.path.join(resultsdir,'vel.mskd')
     vel_mskd.tofile(velmskdfile)
@@ -386,7 +389,16 @@ def main(argv=None):
     title = 'Mask'
     plot_lib.make_im_png(mask, pngfile, cmap_noise, title, 0, 1)
 
-    
+
+    # %% Add mask to cum.h5
+    cumfile = os.path.join(tsadir, 'cum.h5')
+    compress = 'gzip'
+    with h5.File(cumfile, 'r+') as f:
+        if 'mask' in f:
+            del f['mask']
+        f.create_dataset('mask', data=mask, compression=compress)
+
+
     #%% Finish
     elapsed_time = time.time()-start
     hour = int(elapsed_time/3600)
