@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import time
+import math
 import requests
 import dateutil
 import datetime as dt
@@ -645,3 +646,51 @@ def xy2bl(x, y, lat1, dlat, lon1, dlon):
     lon = lon1+dlon*x
 
     return lat, lon
+
+
+#%%
+def get_pair_folders(geoc_dir):
+    """Get list of pair folders (yyyymmdd_yyyymmdd) in GEOC dir."""
+    pairs = []
+    for item in os.listdir(geoc_dir):
+        path = os.path.join(geoc_dir, item)
+        if os.path.isdir(path) and re.match(r'\d{8}_\d{8}', item):
+            pairs.append(item)
+    return sorted(pairs)
+
+
+#%%
+def calculate_common_geometry(gt1, shape1, gt2, shape2):
+    """Calculate common geometry by resampling to gt1 resolution and overlapping extent."""
+    # gt1 is reference: (x0, dx, 0, y0, 0, dy)
+    x0_1, dx1, _, y0_1, _, dy1 = gt1
+    x0_2, dx2, _, y0_2, _, dy2 = gt2
+
+    # Calculate overlapping extent
+    x1_end = x0_1 + shape1[1] * dx1
+    x2_end = x0_2 + shape2[1] * dx2
+    y1_end = y0_1 + shape1[0] * dy1
+    y2_end = y0_2 + shape2[0] * dy2
+
+    x_min = max(x0_1, x0_2)
+    x_max = min(x1_end, x2_end)
+    y_top = min(y0_1, y0_2)
+    y_bottom = max(y1_end, y2_end)
+
+    if x_min >= x_max or y_bottom >= y_top:
+        raise ValueError("No overlapping area")
+
+    # Align overlap to the reference grid
+    eps = 1e-9
+    x_offset = int(math.ceil((x_min - x0_1) / dx1 - eps))
+    x_end_index = int(math.floor((x_max - x0_1) / dx1 + eps))
+    y_offset = int(math.ceil((y0_1 - y_top) / abs(dy1) - eps))
+    y_end_index = int(math.floor((y0_1 - y_bottom) / abs(dy1) + eps))
+
+    nx = x_end_index - x_offset
+    ny = y_end_index - y_offset
+    if nx <= 0 or ny <= 0:
+        raise ValueError("No overlapping area after alignment to reference grid")
+
+    new_gt = (x0_1 + x_offset * dx1, dx1, 0, y0_1 + y_offset * dy1, 0, dy1)
+    return new_gt, (ny, nx)
