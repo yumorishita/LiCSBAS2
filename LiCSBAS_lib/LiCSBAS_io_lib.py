@@ -233,8 +233,15 @@ def get_geotiff_info(tif_path):
 
 
 #%%
-def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, nodata=None):
-    """Resample geotiff to new geometry."""
+def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, nodata=None, resample_alg='cubic'):
+    """Resample geotiff to new geometry.
+
+    Parameters
+    ----------
+    resample_alg : str or int
+        Resampling algorithm to use. If a string is provided, it is mapped to a
+        GDAL resampling constant. The default is 'cubic'.
+    """
     src_ds = gdal.Open(src_path)
     if src_ds is None:
         return False
@@ -245,6 +252,26 @@ def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, no
         nodata = src_ds.GetRasterBand(1).GetNoDataValue()
         if nodata is None:
             nodata = 0.0
+            src_ds.GetRasterBand(1).SetNoDataValue(nodata)
+
+    if isinstance(resample_alg, str):
+        alg = resample_alg.strip().lower().replace('-', '').replace('_', '')
+        resample_map = {
+            'nearest': gdal.GRA_NearestNeighbour,
+            'nearestneighbour': gdal.GRA_NearestNeighbour,
+            'bilinear': gdal.GRA_Bilinear,
+            'cubic': gdal.GRA_Cubic,
+            'cubicspline': gdal.GRA_CubicSpline,
+            'lanczos': gdal.GRA_Lanczos,
+            'average': gdal.GRA_Average,
+            'mode': gdal.GRA_Mode,
+            'max': gdal.GRA_Max,
+            'min': gdal.GRA_Min,
+            'med': gdal.GRA_Med,
+            'q1': gdal.GRA_Q1,
+            'q3': gdal.GRA_Q3,
+        }
+        resample_alg = resample_map.get(alg, gdal.GRA_NearestNeighbour)
 
     driver = gdal.GetDriverByName('GTiff')
     dst_ds = driver.Create(dst_path, new_shape[1], new_shape[0], 1, dtype, options=['COMPRESS=DEFLATE', 'TILED=YES'])
@@ -252,7 +279,7 @@ def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, no
     dst_ds.SetProjection(proj)
     dst_ds.GetRasterBand(1).SetNoDataValue(nodata)
 
-    gdal.ReprojectImage(src_ds, dst_ds, src_ds.GetProjection(), proj, gdal.GRA_Bilinear)
+    gdal.ReprojectImage(src_ds, dst_ds, src_ds.GetProjection(), proj, resample_alg)
     dst_ds.FlushCache()
     dst_ds = None
     src_ds = None
