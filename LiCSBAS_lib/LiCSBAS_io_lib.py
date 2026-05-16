@@ -218,3 +218,70 @@ def get_param_par(mlipar, field):
     value = subp.check_output(['grep', field,mlipar]).decode().split()[1].strip()
     return value
 
+
+#%%
+def get_geotiff_info(tif_path):
+    """Get geotransform, projection, and shape from a geotiff."""
+    ds = gdal.Open(tif_path)
+    if ds is None:
+        raise ValueError(f"Cannot open {tif_path}")
+    gt = ds.GetGeoTransform()
+    proj = ds.GetProjection()
+    shape = (ds.RasterYSize, ds.RasterXSize)
+    ds = None
+    return gt, proj, shape
+
+
+#%%
+def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, nodata=None, resample_alg='cubic'):
+    """Resample geotiff to new geometry.
+
+    Parameters
+    ----------
+    resample_alg : str or int
+        Resampling algorithm to use. If a string is provided, it is mapped to a
+        GDAL resampling constant. The default is 'cubic'.
+    """
+    src_ds = gdal.Open(src_path)
+    if src_ds is None:
+        return False
+
+    if dtype is None:
+        dtype = src_ds.GetRasterBand(1).DataType
+    if nodata is None:
+        nodata = src_ds.GetRasterBand(1).GetNoDataValue()
+        if nodata is None:
+            nodata = 0.0
+            src_ds.GetRasterBand(1).SetNoDataValue(nodata)
+
+    if isinstance(resample_alg, str):
+        alg = resample_alg.strip().lower().replace('-', '').replace('_', '')
+        resample_map = {
+            'nearest': gdal.GRA_NearestNeighbour,
+            'nearestneighbour': gdal.GRA_NearestNeighbour,
+            'bilinear': gdal.GRA_Bilinear,
+            'cubic': gdal.GRA_Cubic,
+            'cubicspline': gdal.GRA_CubicSpline,
+            'lanczos': gdal.GRA_Lanczos,
+            'average': gdal.GRA_Average,
+            'mode': gdal.GRA_Mode,
+            'max': gdal.GRA_Max,
+            'min': gdal.GRA_Min,
+            'med': gdal.GRA_Med,
+            'q1': gdal.GRA_Q1,
+            'q3': gdal.GRA_Q3,
+        }
+        resample_alg = resample_map.get(alg, gdal.GRA_NearestNeighbour)
+
+    driver = gdal.GetDriverByName('GTiff')
+    dst_ds = driver.Create(dst_path, new_shape[1], new_shape[0], 1, dtype, options=['COMPRESS=DEFLATE', 'TILED=YES'])
+    dst_ds.SetGeoTransform(new_gt)
+    dst_ds.SetProjection(proj)
+    dst_ds.GetRasterBand(1).SetNoDataValue(nodata)
+
+    gdal.ReprojectImage(src_ds, dst_ds, src_ds.GetProjection(), proj, resample_alg)
+    dst_ds.FlushCache()
+    dst_ds = None
+    src_ds = None
+    return True
+
