@@ -217,7 +217,7 @@ def main(indir='.', outdir='GEOC', cc_thresh=None, overwrite=False):
     wl = _wavelength_from_stack(unw_stack)
     # Estimate satellite from wavelength: C-band <= 0.1m, else L-band
     is_cband = (wl is None) or (wl > 0 and wl <= 0.1)
-    
+
     if cc_thresh is None:
         if is_cband:
             cc_thresh = 0.5  # Sentinel-1 default because of filtered coherence
@@ -251,10 +251,7 @@ def main(indir='.', outdir='GEOC', cc_thresh=None, overwrite=False):
             cc_arr = cc_arr / 255.0
 
         # ARIA unwrappedPhase uses opposite sign compared to GEOC/ASF
-        # Sentinel-1 (C-band): apply sign flip
-        # NISAR (L-band): no sign flip needed
-        if is_cband:
-            unw_arr = -1.0 * unw_arr
+        unw_arr = -1.0 * unw_arr
 
         mask = (cc_arr < cc_thresh) | np.isnan(cc_arr)
         unw_arr[mask] = 0.0
