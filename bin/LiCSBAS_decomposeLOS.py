@@ -234,7 +234,7 @@ def main(argv=None):
 
     #%% Decompose
     ## Assuming no NS displacement,
-    ## [dlon1, ..., dlosn].T = [e1, n1, u1; ...; en, nn, un][de, dn, du].T
+    ## [dlos1, ..., dlosn].T = [e1, n1, u1; ...; en, nn, un][de, dn, du].T
     ##                       = [e1, u1; ...; en, un][de, du].T
     ## b=A*x -> x=(A.T*A)^(-1)*A.T*b
     ## [de, du].T = [a11, a12; a12, a22]^(-1)*[be, bu].T
