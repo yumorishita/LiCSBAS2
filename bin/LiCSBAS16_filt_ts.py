@@ -106,7 +106,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.2"; date=20250725; author="Y. Morishita"
+    ver="1.6.3"; date=20260805; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -520,6 +520,10 @@ def main(argv=None):
 
     ### Find stable reference
     min_rms = np.nanmin(rms_cum_wrt_med)
+    if np.isnan(min_rms):
+        print('\nERROR: All pixels in rms_cum_wrt_med are nan. Cannot find '
+              'a stable reference point.', file=sys.stderr)
+        return 1
     refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
     refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
     refy2s, refx2s = refy1s+1, refx1s+1
@@ -764,6 +768,11 @@ def filter_wrapper(i):
         ## Limit reading data within filtwidth_yr*4
         ixs = time_diff_sq < (filtwidth_yr*4)**2
 
+        if ixs.sum() == 1:  ## only itself within the temporal filter window
+            print('  WARNING: {} is temporally isolated (no other images '
+                  'within filtwidth_yr*4). No temporal filter applied.'
+                  .format(imdates[i]), flush=True)
+
         raw_temporal_weights = np.exp(-time_diff_sq[ixs] / (2 * filtwidth_yr**2)) #len(ixs)
 
         valid_data_mask = ~np.isnan(cum[ixs, :, :]) #len(ixs), length, width
@@ -787,7 +796,7 @@ def filter_wrapper(i):
         _cum_filt = cum[i, :, :] ## No spatial
     else:
         with warnings.catch_warnings(): ## To silence warning
-            if i ==0: cum_hpt = cum_hpt+sys.float_info.epsilon ##To distinguish from 0 of filtered nodata
+            cum_hpt = cum_hpt+sys.float_info.epsilon ##To distinguish from 0 of filtered nodata
 
 #                warnings.simplefilter('ignore', FutureWarning)
             warnings.simplefilter('ignore', RuntimeWarning)
