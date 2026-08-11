@@ -2,7 +2,7 @@
 """
 Python3 library of input/output functions for LiCSBAS.
 
-v1.4 20210224 Yu Morishita
+v1.5 20260811 Yu Morishita
 
 """
 import sys
@@ -26,6 +26,34 @@ def make_dummy_bperp(bperp_file, imdates):
             ifg_dt = dt.datetime.strptime(imd, '%Y%m%d').toordinal() - dt.datetime.strptime(imdates[0], '%Y%m%d').toordinal()
 
             print('{:3d} {} {} {:5.2f} {:4d} {} {:4d} {} {:5.2f}'.format(i, imdates[0], imd, bp, ifg_dt, 0, ifg_dt, 0, bp), file=f)
+
+
+#%%
+def make_bperp_file(bperp_file, imdates, bperp_dict):
+    """
+    Make a baselines file in the new 4-column format readable by
+    read_bperp_file:
+          smdate    sdate    bp    dt
+        20170302 20170326 130.9  24.0
+    smdate is imdates[0]; bp is bperp (m) of sdate relative to smdate;
+    dt is temporal baseline (days).
+
+    bperp_dict is {'yyyymmdd': bperp} with values relative to any common
+    reference (e.g. from tools_lib.get_bperp_asf); they are re-referenced
+    to imdates[0] here. Raise ValueError if any imdate is missing from
+    bperp_dict.
+    """
+    missing = [imd for imd in imdates if imd not in bperp_dict]
+    if missing:
+        raise ValueError('bperp not available for: {}'.format(' '.join(missing)))
+
+    smdate = imdates[0]
+    bp0 = float(bperp_dict[smdate])
+    with open(bperp_file, 'w') as f:
+        for imd in imdates[1:]:
+            bp = float(bperp_dict[imd]) - bp0
+            ifg_dt = dt.datetime.strptime(imd, '%Y%m%d').toordinal() - dt.datetime.strptime(smdate, '%Y%m%d').toordinal()
+            print('{} {} {:6.1f} {:5.1f}'.format(smdate, imd, bp, float(ifg_dt)), file=f)
 
 
 #%%

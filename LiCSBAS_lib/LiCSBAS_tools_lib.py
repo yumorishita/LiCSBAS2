@@ -2,7 +2,7 @@
 """
 Python3 library of time series analysis tools for LiCSBAS.
 
-v1.10.0 20250907 Yu Morishita
+v1.11.0 20260811 Yu Morishita
 """
 import os
 import sys
@@ -253,6 +253,157 @@ def download_data(url, file, n_retry=3):
     print("    Error while downloading from {}".format(url),
           file=sys.stderr, flush=True)
     return # fail
+
+
+#%%
+def get_asf_reference_scene(lon, lat, imdates, center_time=None, path=None,
+                            platform='SENTINEL-1', timeout=60):
+    """
+    Find a granule (scene) name at ASF usable as the reference of a baseline
+    stack query, by searching scenes containing (lon, lat) on the epoch dates.
+    No authentication is required.
+
+    Inputs:
+      lon, lat    : Point within the area of interest (deg, EPSG:4326)
+      imdates     : List of epoch dates ['yyyymmdd',...]; tried in order
+                    until a scene is found
+      center_time : 'HH:MM:SS' approx acquisition time (UTC) to disambiguate
+                    multiple paths covering the point (optional)
+      path        : Path (track, relative orbit) number to disambiguate
+                    (optional)
+      platform    : ASF platform keyword (only SENTINEL-1 supported)
+
+    Returns:
+      Scene name (str), or None if not found or network error
+      (a warning is printed).
+    """
+    url = 'https://api.daac.asf.alaska.edu/services/search/param'
+
+    if center_time is not None:
+        h, m, s = center_time.split(':')[0:3]
+        center_sec = int(h)*3600 + int(m)*60 + int(float(s))
+
+    for imd in imdates:
+        params = {'platform': platform,
+                  'processingLevel': 'SLC',
+                  'beamMode': 'IW',
+                  'intersectsWith': 'POINT({} {})'.format(lon, lat),
+                  'start': '{}-{}-{}T00:00:00Z'.format(imd[0:4], imd[4:6], imd[6:8]),
+                  'end': '{}-{}-{}T23:59:59Z'.format(imd[0:4], imd[4:6], imd[6:8]),
+                  'output': 'geojson',
+                  'maxResults': 20}
+        try:
+            with requests.get(url, params=params, timeout=timeout) as res:
+                res.raise_for_status()
+                features = res.json().get('features', [])
+        except Exception as e:
+            print('WARN: ASF scene search failed ({}: {})'.format(
+                e.__class__.__name__, e), file=sys.stderr, flush=True)
+            return None
+
+        cands = [f['properties'] for f in features if
+                 f['properties'].get('startTime', '')[0:10].replace('-', '') == imd]
+
+        if path is not None:
+            cands = [c for c in cands if int(c['pathNumber']) == int(path)]
+
+        if center_time is not None:
+            for c in cands:
+                h, m, s = c['startTime'][11:19].split(':')
+                scene_sec = int(h)*3600 + int(m)*60 + int(s)
+                d = abs(scene_sec - center_sec)
+                c['_dt_sec'] = min(d, 86400 - d)
+            cands = sorted([c for c in cands if c['_dt_sec'] <= 600],
+                           key=lambda c: c['_dt_sec'])
+
+        if not cands:
+            continue
+
+        paths = sorted(set(int(c['pathNumber']) for c in cands))
+        if len(paths) > 1:
+            print('WARN: Multiple paths {} cover the point on {}; '
+                  'use path {}'.format(paths, imd, cands[0]['pathNumber']),
+                  flush=True)
+
+        return cands[0]['sceneName']
+
+    print('WARN: No SLC scene found at ASF for any epoch date',
+          file=sys.stderr, flush=True)
+    return None
+
+
+#%%
+def get_bperp_asf(lon, lat, imdates, center_time=None, path=None,
+                  platform='SENTINEL-1', timeout=60, n_retry=3):
+    """
+    Get perpendicular baselines (bperp, m) from the ASF baseline API for the
+    stack covering (lon, lat) on imdates. No authentication is required.
+
+    Inputs: same as get_asf_reference_scene.
+
+    Returns:
+      bperp_dict : dict {'yyyymmdd': bperp (float)} of ALL dates available
+                   in the ASF stack (can be more than imdates), relative to
+                   the automatically selected reference scene, or
+      None       : if the stack could not be retrieved (warning printed).
+                   The caller should check that all needed imdates are in
+                   the returned dict.
+    """
+    refscene = get_asf_reference_scene(lon, lat, imdates, center_time, path,
+                                       platform, timeout)
+    if refscene is None:
+        return None
+
+    print('Reference scene for ASF baseline stack: {}'.format(refscene),
+          flush=True)
+
+    url = 'https://api.daac.asf.alaska.edu/services/search/baseline'
+    params = {'reference': refscene,
+              'processingLevel': 'SLC',
+              'output': 'geojson'}
+    features = None
+    for i in range(n_retry):
+        try:
+            with requests.get(url, params=params, timeout=timeout) as res:
+                res.raise_for_status()
+                features = res.json().get('features', [])
+            break # success
+        except Exception as e:
+            print('    {} for baseline stack in {}th try'.format(
+                e.__class__.__name__, i+1), flush=True)
+            pass # try again
+
+    if features is None:
+        print('WARN: Error while getting baseline stack from ASF',
+              file=sys.stderr, flush=True)
+        return None
+
+    if center_time is not None:
+        h, m, s = center_time.split(':')[0:3]
+        center_sec = int(h)*3600 + int(m)*60 + int(float(s))
+
+    bperp_dict = {}
+    dt_sec_dict = {} ## to keep the scene closest in time per date
+    for f in features:
+        props = f['properties']
+        if props.get('perpendicularBaseline') is None:
+            continue ## missing state vectors
+        imd = props['startTime'][0:10].replace('-', '')
+
+        if center_time is not None:
+            h, m, s = props['startTime'][11:19].split(':')
+            scene_sec = int(h)*3600 + int(m)*60 + int(s)
+            d = abs(scene_sec - center_sec)
+            dt_sec = min(d, 86400 - d)
+        else:
+            dt_sec = 0
+
+        ## A date can appear more than once (neighboring frames); dedup
+        if imd not in bperp_dict or dt_sec < dt_sec_dict[imd]:
+            bperp_dict[imd] = float(props['perpendicularBaseline'])
+            dt_sec_dict[imd] = dt_sec
+
+    return bperp_dict
 
 
 #%%
