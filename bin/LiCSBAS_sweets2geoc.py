@@ -24,8 +24,8 @@ Notes:
 - The dolphin unw phase sign convention is the same as LiCSBAS (positive
   phase = motion away from satellite); no sign flip, unlike ARIA products.
 - baselines are fetched from the ASF baseline API (no authentication needed);
-  on any failure (NISAR, no network, incomplete stack) no file is created
-  and LiCSBAS02 generates a dummy bperp instead.
+  epochs without baseline info at ASF are filled with 0. On failure (NISAR,
+  no network) no file is created and LiCSBAS02 generates a dummy bperp.
 - Not converted (candidates for future options): wrapped int, conncomp,
   temporal_coherence/ps_mask masking, timeseries/velocity products.
 
@@ -355,10 +355,12 @@ def make_baselines(out_geoc, pair_names, bounds, center_time, wavelength,
 
         missing = [imd for imd in imdates if imd not in bperp_dict]
         if missing:
-            print(f'WARN: {len(missing)} of {len(imdates)} epochs missing from '
-                  f'ASF baseline stack: {" ".join(missing)}')
-            print('No baselines file created; LiCSBAS02 will generate dummy bperp')
-            return
+            print(f'WARN: bperp not available at ASF for {len(missing)} of '
+                  f'{len(imdates)} epochs (use 0): {" ".join(missing)}')
+            if imdates[0] not in bperp_dict:
+                bperp_dict[imdates[0]] = 0.0
+            for imd in missing:
+                bperp_dict.setdefault(imd, bperp_dict[imdates[0]])
 
         io_lib.make_bperp_file(bperp_file, imdates, bperp_dict)
         print(f'Wrote baselines with bperp of {len(imdates)} epochs from ASF')
