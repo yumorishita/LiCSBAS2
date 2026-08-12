@@ -16,13 +16,16 @@ Outputs:
 - GEOC/X.geo.hgt.tif (if geometry/height.tif or dem.tif found)
 - GEOC/X.geo.E.tif, X.geo.N.tif, X.geo.U.tif (if geometry files found)
 - GEOC/metadata.txt (center_time if known, and radar_freq)
+- GEOC/baselines (bperp fetched from the ASF baseline API; Sentinel-1 only)
 
 Notes:
 - All outputs are reprojected from the dolphin projection (usually UTM) to
   EPSG:4326 on a single common grid.
 - The dolphin unw phase sign convention is the same as LiCSBAS (positive
   phase = motion away from satellite); no sign flip, unlike ARIA products.
-- No baselines file is created (LiCSBAS02 generates a dummy bperp).
+- baselines are fetched from the ASF baseline API (no authentication needed);
+  epochs without baseline info at ASF are filled with 0. On failure (NISAR,
+  no network) no file is created and LiCSBAS02 generates a dummy bperp.
 - Not converted (candidates for future options): wrapped int, conncomp,
   temporal_coherence/ps_mask masking, timeseries/velocity products.
 
@@ -304,9 +307,72 @@ def write_metadata(out_geoc, wavelength, center_time):
     print(f'Wrote metadata: {metadata_path}')
 
 
+def make_baselines(out_geoc, pair_names, bounds, center_time, wavelength,
+                   cslc_names, overwrite=False):
+    """Create GEOC/baselines with bperp from the ASF baseline API (S1 only).
+
+    Never raises: any failure prints a warning and returns without a file,
+    in which case LiCSBAS02 generates a dummy bperp.
+    """
+    bperp_file = os.path.join(out_geoc, 'baselines')
+    if os.path.exists(bperp_file) and not overwrite:
+        print('baselines already exists. Skipping')
+        return
+
+    if any('NISAR' in name for name in cslc_names):
+        print('NISAR data: ASF baseline API not supported; '
+              'LiCSBAS02 will generate dummy bperp')
+        return
+    if wavelength and not 0.05 < wavelength < 0.06:
+        print(f'Non-S1 wavelength ({wavelength} m): ASF baseline API not '
+              'supported; LiCSBAS02 will generate dummy bperp')
+        return
+
+    try:
+        import LiCSBAS_tools_lib as tools_lib
+        import LiCSBAS_io_lib as io_lib
+    except ImportError:
+        print('WARN: LiCSBAS_lib not found in PYTHONPATH; skip baselines; '
+              'LiCSBAS02 will generate dummy bperp')
+        return
+
+    try:
+        imdates = tools_lib.ifgdates2imdates(pair_names)
+        clon = (bounds[0] + bounds[2]) / 2
+        clat = (bounds[1] + bounds[3]) / 2
+
+        # track (path) number from OPERA CSLC burst names if available
+        m = re.search(r'_T(\d{3})-\d{6}-IW\d', cslc_names[0]) if cslc_names else None
+        path = int(m.group(1)) if m else None
+
+        print(f'\nGetting baseline info from ASF for POINT({clon:.3f} {clat:.3f})...')
+        bperp_dict = tools_lib.get_bperp_asf(clon, clat, imdates,
+                                             center_time=center_time, path=path)
+        if not bperp_dict:
+            print('WARN: Could not get baseline info from ASF; '
+                  'LiCSBAS02 will generate dummy bperp')
+            return
+
+        missing = [imd for imd in imdates if imd not in bperp_dict]
+        if missing:
+            print(f'WARN: bperp not available at ASF for {len(missing)} of '
+                  f'{len(imdates)} epochs (use 0): {" ".join(missing)}')
+            if imdates[0] not in bperp_dict:
+                bperp_dict[imdates[0]] = 0.0
+            for imd in missing:
+                bperp_dict.setdefault(imd, bperp_dict[imdates[0]])
+
+        io_lib.make_bperp_file(bperp_file, imdates, bperp_dict)
+        print(f'Wrote baselines with bperp of {len(imdates)} epochs from ASF')
+
+    except Exception as e:
+        print(f'WARN: baselines creation failed ({e}); '
+              'LiCSBAS02 will generate dummy bperp')
+
+
 def main(indir='.', outdir='GEOC', cc_thresh=0.3, n_workers=None,
          resampling='nearest', dem=None, wavelength=None, center_time=None,
-         overwrite=False):
+         overwrite=False, no_baselines=False):
 
     # %% Setting
     workdir, dolphin_dir = find_dirs(indir)
@@ -397,13 +463,18 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.3, n_workers=None,
     write_metadata(out_geoc, wavelength, center_time)
 
     print('No mli in dolphin output; skip (optional for LiCSBAS)')
-    print('No baseline info in dolphin output; LiCSBAS02 will generate dummy bperp')
+
+    if no_baselines:
+        print('--no_baselines specified; LiCSBAS02 will generate dummy bperp')
+    else:
+        make_baselines(out_geoc, [pair[0] for pair in pairs], grid['bounds'],
+                       center_time, wavelength, cslc_names, overwrite)
 
 
 if __name__ == '__main__':
     start = time.time()
     prog = os.path.basename(sys.argv[0])
-    print(f"\n{prog} ver1.0.0 20260705 Y. Morishita")
+    print(f"\n{prog} ver1.1.0 20260811 Y. Morishita")
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     # Show argparse defaults in help messages
@@ -420,11 +491,12 @@ if __name__ == '__main__':
     p.add_argument('--wavelength', type=float, default=None, help='Radar wavelength in m (default: from dolphin_config.yaml)')
     p.add_argument('--center_time', default=None, help='Center time HH:MM:SS (default: from cslc file names in dolphin_config.yaml)')
     p.add_argument('--overwrite', action='store_true', help='Overwrite existing outputs')
+    p.add_argument('--no_baselines', action='store_true', help='Do not query ASF for bperp (no network access); LiCSBAS02 will generate dummy bperp')
     args = p.parse_args()
 
     main(args.indir, args.outdir, args.cc_thresh, args.n_workers,
          args.resampling, args.dem, args.wavelength, args.center_time,
-         args.overwrite)
+         args.overwrite, args.no_baselines)
 
     # Finish
     elapsed_time = datetime.timedelta(seconds=(time.time()-start))
