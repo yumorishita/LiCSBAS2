@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: .github/workflows/environment-ci.yml
+          cache-environment: true
+      - name: Run tests
+        env:
+          MPLBACKEND: Agg
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -v

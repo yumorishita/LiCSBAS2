@@ -1,0 +1,19 @@
+# Conda environment for CI only (see ci.yml).
+# The user-facing environment file is LiCSBAS.yml; this one uses
+# conda-forge and adds pytest.
+name: licsbas-ci
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy=1.26.*
+  - matplotlib=3.7.*
+  - gdal=3.6.*
+  - h5py
+  - astropy
+  - beautifulsoup4
+  - psutil
+  - requests
+  - shapely
+  - statsmodels
+  - pytest
