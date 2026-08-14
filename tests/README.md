@@ -32,9 +32,3 @@ calls to the nonexistent `np.linalg.leastsq` in
 `LiCSBAS_inv_lib.censored_lstsq*`). They are expected to fail until the
 bugs are fixed in separate PRs; when a fix lands, the test starts
 XPASS-ing and must be updated to assert the correct behavior.
-
-## Manual end-to-end tests
-
-`bin/test_LiCSBAS.sh` and `bin/test2_LiCSBAS.sh` (if present) download a
-real LiCSAR frame and run the full batch pipeline. They are
-network-heavy manual tests, intentionally outside pytest.
