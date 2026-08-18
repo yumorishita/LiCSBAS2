@@ -69,10 +69,19 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 
 #%% Import
+import os
+
+os.environ['QT_QPA_PLATFORM']='offscreen'
+### Limit BLAS threads because np.linalg.lstsq uses full CPU but is not much
+### faster than 1CPU. Instead parallelize by multiprocessing. Must be set
+### before importing numpy (BLAS reads them at load time).
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 import datetime as dt
 import getopt
-import os
 import shutil
 import sys
 import time
@@ -81,15 +90,12 @@ import warnings
 import h5py as h5
 import multiprocessing as multi
 import numpy as np
-import psutil
 
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_plot_lib as plot_lib
 import SCM
-
-os.environ['QT_QPA_PLATFORM']='offscreen'
 
 
 class Usage(Exception):
@@ -106,7 +112,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.3"; date=20260805; author="Y. Morishita"
+    ver="1.6.4"; date=20260818; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -134,10 +140,6 @@ def main(argv=None):
     except:
         n_para = max(multi.cpu_count()-1, 1)
 
-    os.environ["OMP_NUM_THREADS"] = "1"
-    # Because np.linalg.lstsq use full CPU but not much faster than 1CPU.
-    # Instead parallelize by multiprocessing
-
     range_str = []
     range_geo_str = []
     ex_range_str = []
@@ -148,7 +150,6 @@ def main(argv=None):
     cmap_vel = SCM.roma.reversed()
     cmap_noise_r = 'viridis_r'
     cmap_wrap = tools_lib.get_cmap('cm_insar')
-    q = multi.get_context('fork')
     compress = 'gzip'
 
 
@@ -266,11 +267,12 @@ def main(argv=None):
     if n_para > n_im:
         n_para = n_im
 
-    # Control n_para depending on available memory
+    ### Approx memory use per worker in deramp/filter (MB). n_para is capped
+    ### by tools_lib.run_pool with this value and the memory available at the
+    ### time of each parallel processing.
     safety_factor = 3
-    mem_avail = (psutil.virtual_memory().available)/2**20 #MB
-    filter_size_approx = length*width*3*4*4*safety_factor/2**20 #MB
-    n_para = max(min(n_para, int(mem_avail/2/filter_size_approx)), 1)
+    mem_per_worker_mb = length*width*3*4*4*safety_factor/2**20 #MB
+    mem_per_worker_png_mb = 4*length*width*4/2**20 #MB, for png creation
 
     ### Calc dt in year
     imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates])
@@ -413,27 +415,26 @@ def main(argv=None):
 
         if n_para == 1 or gpu:
             if gpu: print('With GPU')
-            models = np.zeros(n_im, dtype=object)
-            for i in range(n_im):
-                cum[i, :, :], models[i] = deramp_wrapper(i)
         else:
             print('with {} parallel processing...'.format(n_para), flush=True)
-            ### Parallel processing
-            p = q.Pool(n_para)
-            _result = np.array(p.map(deramp_wrapper, range(n_im)), dtype=object)
-            p.close()
-            del args
 
-            models = _result[:, 1]
-            for i in range(n_im):
-                cum[i, :, :] = _result[i, 0]
-            del _result
+        models = np.zeros(n_im, dtype=object)
+        def store_deramp(i, result):
+            ## Stream results into cum to save memory
+            cum[i, :, :] = result[0]
+            models[i] = result[1]
+
+        tools_lib.run_pool(deramp_wrapper, range(n_im),
+                           1 if gpu else n_para,
+                           mem_per_worker_mb=mem_per_worker_mb,
+                           chunksize=1, store=store_deramp)
 
         ### Only for output increment png files
-        print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        p.map(deramp_wrapper2, range(1, n_im))
-        p.close()
+        ### Run serially if gpu because fork after CUDA init is unsafe
+        print('\nCreate png for increment with {} parallel processing...'.format(1 if gpu else n_para), flush=True)
+        tools_lib.run_pool(deramp_wrapper2, range(1, n_im),
+                           1 if gpu else n_para,
+                           mem_per_worker_mb=mem_per_worker_png_mb)
         del cum_org
 
 
@@ -485,22 +486,19 @@ def main(argv=None):
 
     print('\nHP filter in time, LP filter in space,', flush=True)
 
-    if n_para == 1:
-        for i in range(n_im):
-            cum_filt[i, :, :] = np.float32(filter_wrapper(i))
-    else:
+    ### Run serially if gpu because fork after CUDA init is unsafe
+    if n_para != 1 and not gpu:
         print('with {} parallel processing...'.format(n_para), flush=True)
-        ### Parallel processing
-        p = q.Pool(n_para)
-        cum_filt[:, :, :] = np.array(p.map(filter_wrapper, range(n_im)), dtype=np.float32)
-        p.close()
+    ## Stream results into cum_filt to save memory
+    tools_lib.run_pool(filter_wrapper, range(n_im), 1 if gpu else n_para,
+                       mem_per_worker_mb=mem_per_worker_mb,
+                       chunksize=1, out=cum_filt)
 
 
     ### Only for output increment png files
-    print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
-    p = q.Pool(n_para)
-    p.map(filter_wrapper2, range(1, n_im))
-    p.close()
+    print('\nCreate png for increment with {} parallel processing...'.format(1 if gpu else n_para), flush=True)
+    tools_lib.run_pool(filter_wrapper2, range(1, n_im), 1 if gpu else n_para,
+                       mem_per_worker_mb=mem_per_worker_png_mb)
 
 
     #%% Find stable ref point
