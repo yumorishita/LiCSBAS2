@@ -79,6 +79,14 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
 #%% Import
 import getopt
 import os
+
+### Limit BLAS threads because np.linalg.lstsq uses full CPU but is not much
+### faster than 1CPU. Instead parallelize by multiprocessing. Must be set
+### before importing numpy (BLAS reads them at load time).
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 import sys
 import re
 import time
@@ -108,7 +116,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.4"; date=20260320; author="Y. Morishita"
+    ver="1.5.5"; date=20260818; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -129,10 +137,6 @@ def main(argv=None):
     except:
         n_para = max(multi.cpu_count()-1, 1)
 
-    os.environ["OMP_NUM_THREADS"] = "1"
-    # Because np.linalg.lstsq use full CPU but not much faster than 1CPU.
-    # Instead parallelize by multiprocessing
-
     memory_size = 8000
     gamma = 0.0001
     n_unw_r_thre = []
@@ -142,7 +146,6 @@ def main(argv=None):
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
     cmap_wrap = tools_lib.get_cmap('cm_insar')
-    q = multi.get_context('fork')
     compress = 'gzip'
 
 
@@ -599,10 +602,14 @@ def main(argv=None):
                       flush=True)
 
                 ### Devide unwpatch by n_para for parallel processing
-                p = q.Pool(n_para_gap)
-                _result = np.array(p.map(count_gaps_wrapper, range(n_para_gap)),
-                                   dtype=object)
-                p.close()
+                _n_loop = Aloop.shape[0] if len(Aloop) != 0 else 0
+                _mem_per_worker_mb = (2*(n_ifg+_n_loop)*
+                    np.ceil(n_pt_unnan/n_para_gap)*4/2**20) ## temp arrays
+                _result = np.array(
+                    tools_lib.run_pool(count_gaps_wrapper, range(n_para_gap),
+                                       n_para_gap,
+                                       mem_per_worker_mb=_mem_per_worker_mb),
+                    dtype=object)
 
                 ns_gap_patch[ix_unnan_pt] = np.hstack(_result[:, 0]) #n_pt
                 gap_patch[:, ix_unnan_pt] = np.hstack(_result[:, 1]) #n_im-1, n_pt
@@ -798,21 +805,24 @@ def main(argv=None):
 
 
     #%% Output png images
+    ### Run serially if gpu because fork after CUDA init is unsafe
+    _mem_per_worker_png_mb = 4*length*width*4/2**20
+
     ### Incremental displacement
     _n_para = n_im-1 if n_para > n_im-1 else n_para
+    if gpu: _n_para = 1
     print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
-    p = q.Pool(_n_para)
-    p.map(inc_png_wrapper, range(n_im-1))
-    p.close()
+    tools_lib.run_pool(inc_png_wrapper, range(n_im-1), _n_para,
+                       mem_per_worker_mb=_mem_per_worker_png_mb)
 
     ### Residual for each ifg. png and txt.
     with open(restxtfile, "w") as f:
         print('# RMS of residual (mm)', file=f)
     _n_para = n_ifg if n_para > n_ifg else n_para
+    if gpu: _n_para = 1
     print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
-    p = q.Pool(_n_para)
-    p.map(resid_png_wrapper, range(n_ifg))
-    p.close()
+    tools_lib.run_pool(resid_png_wrapper, range(n_ifg), _n_para,
+                       mem_per_worker_mb=_mem_per_worker_png_mb)
 
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
