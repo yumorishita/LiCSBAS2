@@ -27,8 +27,8 @@ so sourcing `bashrc_LiCSBAS.sh` is not required.
 
 ## Known bugs pinned with xfail
 
-Tests marked `xfail(strict=True)` document existing latent bugs (e.g.
-calls to the nonexistent `np.linalg.leastsq` in
-`LiCSBAS_inv_lib.censored_lstsq*`). They are expected to fail until the
-bugs are fixed in separate PRs; when a fix lands, the test starts
-XPASS-ing and must be updated to assert the correct behavior.
+Latent bugs found while writing tests are pinned with
+`xfail(strict=True)` markers: such a test is expected to fail until the
+bug is fixed in a separate PR; when a fix lands, the test starts
+XPASS-ing and must be updated to assert the correct behavior. There are
+currently no open xfail tests.

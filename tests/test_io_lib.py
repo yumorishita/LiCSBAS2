@@ -178,13 +178,11 @@ def test_geotiff_uint8(tmp_path):
     np.testing.assert_array_equal(io_lib.read_geotiff(str(file)), data)
 
 
-@pytest.mark.xfail(raises=UnboundLocalError, strict=True,
-                   reason='make_geotiff has no else branch for dtypes other '
-                          'than float32/uint8; LiCSBAS_io_lib.py')
-def test_make_geotiff_unsupported_dtype_bug(tmp_path):
+def test_make_geotiff_unsupported_dtype(tmp_path):
     data = np.arange(80, dtype=np.int32).reshape(8, 10)
-    io_lib.make_geotiff(data, 34.0, 132.0, -0.001, 0.001,
-                        str(tmp_path / 'test.tif'), [])
+    with pytest.raises(ValueError, match='not supported'):
+        io_lib.make_geotiff(data, 34.0, 132.0, -0.001, 0.001,
+                            str(tmp_path / 'test.tif'), [])
 
 
 def test_read_geotiff_with_ref(tmp_path):
