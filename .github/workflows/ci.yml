@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mamba-org/setup-micromamba@v2
         with:
-          environment-file: .github/workflows/environment-ci.yml
+          environment-file: .github/environment-ci.yml
           cache-environment: true
       - name: Run tests
         env:
