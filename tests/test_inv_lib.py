@@ -1,6 +1,5 @@
 """Unit tests for LiCSBAS_inv_lib (SBAS design matrices and inversion)."""
 import numpy as np
-import pytest
 
 import LiCSBAS_inv_lib as inv_lib
 import synth
@@ -116,23 +115,7 @@ def test_censored_lstsq2_multicolumn():
     np.testing.assert_allclose(X, X_true, atol=1e-8)
 
 
-@pytest.mark.xfail(raises=AttributeError, strict=True,
-                   reason='np.linalg.leastsq does not exist (should be '
-                          'lstsq); LiCSBAS_inv_lib.py censored_lstsq')
-def test_censored_lstsq_1d_bug():
-    # Documents a latent bug: the 1-D/single-column branch calls the
-    # nonexistent np.linalg.leastsq. Fix in a separate PR.
-    A = np.eye(4)
-    b = np.arange(4.0)
-    m = np.ones(4, dtype=bool)
-    X = inv_lib.censored_lstsq(A, b, m)
-    np.testing.assert_allclose(X, b)
-
-
-@pytest.mark.xfail(raises=AttributeError, strict=True,
-                   reason='np.linalg.leastsq does not exist (should be '
-                          'lstsq); LiCSBAS_inv_lib.py censored_lstsq2')
-def test_censored_lstsq2_single_column_bug():
+def test_censored_lstsq2_single_column():
     inv_lib.bootcount, inv_lib.bootnum = 0, 1
     A = np.eye(4)
     B = np.arange(4.0)[:, None]
@@ -141,15 +124,13 @@ def test_censored_lstsq2_single_column_bug():
     np.testing.assert_allclose(np.ravel(X), np.arange(4.0))
 
 
-@pytest.mark.xfail(raises=IndexError, strict=True,
-                   reason='B.shape[1] is accessed before the B.ndim check; '
-                          'LiCSBAS_inv_lib.py censored_lstsq2')
-def test_censored_lstsq2_1d_bug():
+def test_censored_lstsq2_1d():
     inv_lib.bootcount, inv_lib.bootnum = 0, 1
     A = np.eye(4)
     b = np.arange(4.0)
     m = np.ones(4, dtype=bool)
-    inv_lib.censored_lstsq2(A, b, m)
+    X = inv_lib.censored_lstsq2(A, b, m)
+    np.testing.assert_allclose(np.ravel(X), np.arange(4.0))
 
 
 #%% NSBAS inversion

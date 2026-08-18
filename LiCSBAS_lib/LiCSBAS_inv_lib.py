@@ -389,12 +389,13 @@ def censored_lstsq2(A, B, M, gpu=False):
         xp = np
 
     print('\r  Running {0:3}/{1:3}th bootstrap...'.format(bootcount, bootnum), end='', flush=True)
-    Bshape1 = B.shape[1]
+    Bshape1 = 1 if B.ndim == 1 else B.shape[1]
     bootcount = bootcount+1
 
     # if B is a vector, simply drop out corresponding rows in A
     if B.ndim == 1 or Bshape1 == 1:
-        sol = xp.linalg.leastsq(A[M], B[M])[0]
+        m = xp.ravel(M)
+        sol = xp.linalg.lstsq(A[m], xp.ravel(B)[m], rcond=None)[0]
         if gpu:
             sol = xp.asnumpy(sol)
             del A, B, M
@@ -476,40 +477,6 @@ def calc_stc(cum, gpu=False):
         del cum, cum1, _stc, d_cum, dd_cum, sumsq_dd_cum, n_dd_cum
 
     return stc
-
-
-#%%
-def censored_lstsq(A, B, M):
-    ## http://alexhwilliams.info/itsneuronalblog/2018/02/26/censored-lstsq/
-    ## This is actually slow because matmul does not use multicore...
-    ## Need multiprocessing.
-    ## Precison is bad widh bad condition, so this is unfortunately useless for NSABS...
-    ## But maybe usable for vstd because its condition is good.
-    """Solves least squares problem subject to missing data.
-
-    Note: uses a broadcasted solve for speed.
-
-    Args
-    ----
-    A (ndarray) : m x r matrix
-    B (ndarray) : m x n matrix
-    M (ndarray) : m x n binary matrix (zeros indicate missing values)
-
-    Returns
-    -------
-    X (ndarray) : r x n matrix that minimizes norm(M*(AX - B))
-    """
-
-    # Note: we should check A is full rank but we won't bother...
-
-    # if B is a vector, simply drop out corresponding rows in A
-    if B.ndim == 1 or B.shape[1] == 1:
-        return np.linalg.leastsq(A[M], B[M])[0]
-
-    # else solve via tensor representation
-    rhs = np.dot(A.T, M * B).T[:,:,None] # n x r x 1 tensor
-    T = np.matmul(A.T[None,:,:], M.T[:,:,None] * A[None,:,:]) # n x r x r tensor
-    return np.squeeze(np.linalg.solve(T, rhs)).T # transpose to get r x n
 
 
 #%%
