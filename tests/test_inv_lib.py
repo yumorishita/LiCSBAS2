@@ -178,6 +178,21 @@ def test_invert_nsbas_wls():
     np.testing.assert_allclose(vel, vel_true, atol=0.01)
 
 
+def test_invert_nsbas_wls_ncore2_matches_ncore1():
+    rng = np.random.default_rng(8)
+    n_pt = 30
+    vel_true = rng.uniform(-20, 20, n_pt)
+    unw, _ = forward_model_unw(vel_true, n_pt)
+    unw = unw.astype(np.float32)
+    unw[rng.random(unw.shape) < 0.15] = np.nan
+    var = np.full_like(unw, 2.0)
+    G = inv_lib.make_sb_matrix(IFGDATES)
+    res1 = inv_lib.invert_nsbas_wls(unw.copy(), var, G, DT_CUM, 0.0001, 1)
+    res2 = inv_lib.invert_nsbas_wls(unw.copy(), var, G, DT_CUM, 0.0001, 2)
+    for a, b in zip(res1, res2):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
 #%% Bootstrap velocity std (seeded -> deterministic)
 def test_calc_velstd_withnan():
     rng = np.random.default_rng(7)
