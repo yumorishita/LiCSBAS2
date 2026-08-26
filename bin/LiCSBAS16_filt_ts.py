@@ -72,12 +72,6 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 import os
 
 os.environ['QT_QPA_PLATFORM']='offscreen'
-### Limit BLAS threads because np.linalg.lstsq uses full CPU but is not much
-### faster than 1CPU. Instead parallelize by multiprocessing. Must be set
-### before importing numpy (BLAS reads them at load time).
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
 
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 import datetime as dt
@@ -120,7 +114,7 @@ def main(argv=None):
     global cum, mask, deg_ramp, hgt_linearflag, hgt, hgt_min, hgt_max,\
     filtcumdir, filtincdir, imdates, cycle, coef_r2m, models, \
     filtwidth_yr, filtwidth_km, dt_cum, x_stddev, y_stddev, mask2, cmap_wrap
-    global cum_org, cum_filt, gpu
+    global cum_org, cum_filt
 
 
     #%% Set default
@@ -133,7 +127,6 @@ def main(argv=None):
     hgt_min = 200 ## meter
     hgt_max = 10000 ## meter
     maskflag = True
-    gpu = False
 
     try:
         n_para = max(len(os.sched_getaffinity(0))-1, 1)
@@ -159,7 +152,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu"])
+                            "ex_range=", "ex_range_geo="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -194,8 +187,6 @@ def main(argv=None):
                 ex_range_str = a
             elif o == '--ex_range_geo':
                 ex_range_geo_str = a
-            elif o == '--gpu':
-                gpu = True
 
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
@@ -207,9 +198,6 @@ def main(argv=None):
             raise Usage('Both --range and --range_geo given, use either one not both!')
         if ex_range_str and ex_range_geo_str:
             raise Usage('Both --ex_range and --ex_range_geo given, use either one not both!')
-        if gpu:
-            print("\nGPU option is activated. Need cupy module.\n")
-            import cupy as cp
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -413,9 +401,7 @@ def main(argv=None):
         else:
             print('\nDeramp ifgs with the degree of {} and hgt-linear,'.format(deg_ramp), flush=True)
 
-        if n_para == 1 or gpu:
-            if gpu: print('With GPU')
-        else:
+        if n_para != 1:
             print('with {} parallel processing...'.format(n_para), flush=True)
 
         models = np.zeros(n_im, dtype=object)
@@ -424,16 +410,13 @@ def main(argv=None):
             cum[i, :, :] = result[0]
             models[i] = result[1]
 
-        tools_lib.run_pool(deramp_wrapper, range(n_im),
-                           1 if gpu else n_para,
+        tools_lib.run_pool(deramp_wrapper, range(n_im), n_para,
                            mem_per_worker_mb=mem_per_worker_mb,
                            chunksize=1, store=store_deramp)
 
         ### Only for output increment png files
-        ### Run serially if gpu because fork after CUDA init is unsafe
-        print('\nCreate png for increment with {} parallel processing...'.format(1 if gpu else n_para), flush=True)
-        tools_lib.run_pool(deramp_wrapper2, range(1, n_im),
-                           1 if gpu else n_para,
+        print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
+        tools_lib.run_pool(deramp_wrapper2, range(1, n_im), n_para,
                            mem_per_worker_mb=mem_per_worker_png_mb)
         del cum_org
 
@@ -486,18 +469,17 @@ def main(argv=None):
 
     print('\nHP filter in time, LP filter in space,', flush=True)
 
-    ### Run serially if gpu because fork after CUDA init is unsafe
-    if n_para != 1 and not gpu:
+    if n_para != 1:
         print('with {} parallel processing...'.format(n_para), flush=True)
     ## Stream results into cum_filt to save memory
-    tools_lib.run_pool(filter_wrapper, range(n_im), 1 if gpu else n_para,
+    tools_lib.run_pool(filter_wrapper, range(n_im), n_para,
                        mem_per_worker_mb=mem_per_worker_mb,
                        chunksize=1, out=cum_filt)
 
 
     ### Only for output increment png files
-    print('\nCreate png for increment with {} parallel processing...'.format(1 if gpu else n_para), flush=True)
-    tools_lib.run_pool(filter_wrapper2, range(1, n_im), 1 if gpu else n_para,
+    print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
+    tools_lib.run_pool(filter_wrapper2, range(1, n_im), n_para,
                        mem_per_worker_mb=mem_per_worker_png_mb)
 
 
@@ -677,7 +659,7 @@ def deramp_wrapper(i):
         print("  {0:3}/{1:3}th image...".format(i, len(imdates)), flush=True)
 
     fit, model = tools_lib.fit2dh(cum_org[i, :, :]*mask*mask2, deg_ramp, hgt,
-                                  hgt_min, hgt_max, gpu=gpu) ## fit is not masked
+                                  hgt_min, hgt_max) ## fit is not masked
     _cum = cum_org[i, :, :]-fit
 
     if hgt_linearflag:

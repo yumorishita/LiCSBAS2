@@ -64,13 +64,6 @@ LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
 #%% Import
 import getopt
 import os
-
-### Limit BLAS threads for the parallel processing by multiprocessing.
-### Must be set before importing numpy (BLAS reads them at load time).
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-
 import sys
 import time
 import shutil

@@ -9,3 +9,4 @@ psutil=5.9.0
 requests=2.32.3
 shapely=2.0.6
 statsmodels=0.14.4
+threadpoolctl=3.5.0

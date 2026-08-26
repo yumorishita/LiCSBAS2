@@ -79,14 +79,6 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
 #%% Import
 import getopt
 import os
-
-### Limit BLAS threads because np.linalg.lstsq uses full CPU but is not much
-### faster than 1CPU. Instead parallelize by multiprocessing. Must be set
-### before importing numpy (BLAS reads them at load time).
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-
 import sys
 import re
 import time
@@ -805,12 +797,10 @@ def main(argv=None):
 
 
     #%% Output png images
-    ### Run serially if gpu because fork after CUDA init is unsafe
     _mem_per_worker_png_mb = 4*length*width*4/2**20
 
     ### Incremental displacement
     _n_para = n_im-1 if n_para > n_im-1 else n_para
-    if gpu: _n_para = 1
     print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
     tools_lib.run_pool(inc_png_wrapper, range(n_im-1), _n_para,
                        mem_per_worker_mb=_mem_per_worker_png_mb)
@@ -819,7 +809,6 @@ def main(argv=None):
     with open(restxtfile, "w") as f:
         print('# RMS of residual (mm)', file=f)
     _n_para = n_ifg if n_para > n_ifg else n_para
-    if gpu: _n_para = 1
     print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
     tools_lib.run_pool(resid_png_wrapper, range(n_ifg), _n_para,
                        mem_per_worker_mb=_mem_per_worker_png_mb)

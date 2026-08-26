@@ -650,6 +650,20 @@ def get_patchrow(width, length, n_data, memory_size):
 
 
 #%%
+def _limit_worker_threads():
+    ### Initializer for run_pool workers: limit BLAS/OpenMP to 1 thread to
+    ### avoid oversubscription (n_para workers x N BLAS threads). Must run
+    ### in the worker itself because the OpenMP limit is thread-local and
+    ### does not reliably survive fork. Keep a global reference so the
+    ### limit is not undone by garbage collection.
+    global _worker_thread_limit
+    try:
+        from threadpoolctl import threadpool_limits
+        _worker_thread_limit = threadpool_limits(limits=1)
+    except ImportError:  ## Same behavior as before, only risking slowdown
+        pass
+
+
 def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
              out=None, store=None):
     """
@@ -665,8 +679,11 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
       (streaming; avoids materializing all results at a time).
     - If store is given, store(i, result) is called instead (e.g., for
       functions returning tuples). store overrides out.
-    - If n_para == 1, run serially without forking (also should be used
-      after GPU use because forking after CUDA initialization is unsafe).
+    - If n_para == 1, run serially without forking.
+    - Each worker limits its BLAS/OpenMP threads to 1 (if threadpoolctl is
+      available) to avoid oversubscription by n_para workers x N BLAS
+      threads. The parent is not affected, so serial BLAS calls in the
+      caller stay multi-threaded.
 
     Returns:
         list of results in the order of args (or out if out is given)
@@ -711,7 +728,8 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
 
     ctx = multi.get_context('fork')
     try:
-        with ProcessPoolExecutor(max_workers=n_para, mp_context=ctx) as p:
+        with ProcessPoolExecutor(max_workers=n_para, mp_context=ctx,
+                                 initializer=_limit_worker_threads) as p:
             return _consume(p.map(func, args, chunksize=chunksize))
     except BrokenProcessPool as e:
         raise RuntimeError(
