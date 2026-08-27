@@ -686,7 +686,8 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
       caller stay multi-threaded.
 
     Returns:
-        list of results in the order of args (or out if out is given)
+        list of results in the order of args, or out if out is given, or
+        None if store is given (the caller stores the results itself)
     """
     from concurrent.futures import ProcessPoolExecutor
     from concurrent.futures.process import BrokenProcessPool
@@ -733,14 +734,17 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
             return _consume(p.map(func, args, chunksize=chunksize))
     except BrokenProcessPool as e:
         raise RuntimeError(
-            'A worker process died unexpectedly, most likely killed by the '
-            'OS out-of-memory (OOM) killer because memory ran out\n'
-            '(check with e.g. `dmesg -T | grep -i "killed process"`).\n'
-            'Try one of the following and rerun:\n'
+            'A worker process died unexpectedly ({}).\n'
+            'The most common cause is the OS out-of-memory (OOM) killer when '
+            'memory ran out (check with e.g.\n'
+            '`dmesg -T | grep -i "killed process"`), but a crash inside the '
+            'worker itself looks the same here.\n'
+            'If it was memory, try one of the following and rerun:\n'
             '  - Reduce the number of parallel workers (--n_para)\n'
-            '  - Reduce memory use (e.g., --mem_size, smaller data size)\n'
+            '  - Reduce memory use (--mem_size if the script has it, or '
+            'reduce the data size in step02 or step05)\n'
             '  - Close other programs or use a machine with more memory'
-        ) from e
+            .format(type(e).__name__)) from e
 
 
 #%%
