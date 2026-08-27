@@ -255,13 +255,6 @@ def main(argv=None):
     if n_para > n_im:
         n_para = n_im
 
-    ### Approx memory use per worker in deramp/filter (MB). n_para is capped
-    ### by tools_lib.run_pool with this value and the memory available at the
-    ### time of each parallel processing.
-    safety_factor = 3
-    mem_per_worker_mb = length*width*3*4*4*safety_factor/2**20 #MB
-    mem_per_worker_png_mb = 4*length*width*4/2**20 #MB, for png creation
-
     ### Calc dt in year
     imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates])
     dt_cum = np.float32((np.array(imdates_dt)-imdates_dt[0])/365.25)
@@ -289,6 +282,34 @@ def main(argv=None):
     ### temporal filter width
     if not filtwidth_yr and filtwidth_yr != 0:
         filtwidth_yr = dt_cum[-1]/(n_im-1)*3 ## avg interval*3
+
+    ### Approx memory use per worker (MB). n_para is capped by
+    ### tools_lib.run_pool with this value and the memory available at the
+    ### time of each parallel processing.
+    safety_factor = 1.5 ## for next_fast_len rounding and FFT workspace
+    ### The two heavy stages of filter_wrapper do not overlap because the
+    ### temporal temporaries are deleted before convolve_fft, so take the
+    ### larger of:
+    ###  - HP in time: 3 float32 arrays of n_im_t frames alive at once
+    ###  - LP in space: astropy pads the frame by the kernel size (8*stddev)
+    ###    and keeps ~10 complex128 arrays of that padded size alive at once,
+    ###    i.e. memory grows rapidly with filtwidth_km
+    if filtwidth_yr:
+        n_im_t = int((np.abs(dt_cum-dt_cum[:, None]) <
+                      filtwidth_yr*4).sum(axis=1).max())
+    else:
+        n_im_t = 1
+    _mem_hpt_mb = n_im_t*length*width*4*3/2**20
+    if filtwidth_km == 0:
+        _mem_lps_mb = 0
+    else:
+        _ksize = Gaussian2DKernel(x_stddev, y_stddev).shape
+        _mem_lps_mb = 10*16*(length+_ksize[0])*(width+_ksize[1])/2**20
+    mem_per_worker_mb = max(_mem_hpt_mb, _mem_lps_mb)*safety_factor
+
+    ### png wrappers: ~12 frames (3 differences, 3 wrapped results, complex64
+    ### temporaries of the wrapping, and matplotlib's float32 copy)
+    mem_per_worker_png_mb = 12*length*width*4/2**20*safety_factor
 
     ### hgt_linear
     if hgt_linearflag:

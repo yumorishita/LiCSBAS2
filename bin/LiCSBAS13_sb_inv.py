@@ -797,7 +797,9 @@ def main(argv=None):
 
 
     #%% Output png images
-    _mem_per_worker_png_mb = 4*length*width*4/2**20
+    ### Approx memory use per worker (MB): ~12 frames (inputs, wrapped
+    ### results, complex64 temporaries and matplotlib's float32 copy)
+    _mem_per_worker_png_mb = 12*length*width*4/2**20*1.5 ## 1.5 for margin
 
     ### Incremental displacement
     _n_para = n_im-1 if n_para > n_im-1 else n_para
