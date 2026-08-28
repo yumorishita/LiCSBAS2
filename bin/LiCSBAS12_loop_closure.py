@@ -92,7 +92,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.5"; date=20260320; author="Y. Morishita"
+    ver="1.6.6"; date=20260818; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -116,7 +116,6 @@ def main(argv=None):
     cycle = 3 # 2pi*3/cycle
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    q = multi.get_context('fork')
 
 
     #%% Read options
@@ -317,9 +316,12 @@ def main(argv=None):
     good_ifg = []
 
     ### Parallel processing
-    p = q.Pool(_n_para)
-    loop_ph_rms_ifg = np.array(p.map(loop_closure_1st_wrapper, range(n_loop)), dtype=np.float32)
-    p.close()
+    ### ~6 float32 frames per worker (3 unw + loop_ph + png)
+    mem_per_worker_mb = 6*length*width*4/2**20
+    loop_ph_rms_ifg = np.array(
+        tools_lib.run_pool(loop_closure_1st_wrapper, range(n_loop), _n_para,
+                           mem_per_worker_mb=mem_per_worker_mb),
+        dtype=np.float32)
 
 
     for i in range(n_loop):
@@ -389,9 +391,11 @@ def main(argv=None):
     print('with {} parallel processing...'.format(_n_para2), flush=True)
 
     ### Parallel processing
-    p = q.Pool(_n_para2)
-    res = np.array(p.map(loop_closure_2nd_wrapper, args), dtype=np.float32)
-    p.close()
+    ## Stream results into preallocated res to save memory
+    res = np.empty((len(args), 3, length, width), dtype=np.float32)
+    tools_lib.run_pool(loop_closure_2nd_wrapper, args, _n_para2,
+                       mem_per_worker_mb=mem_per_worker_mb,
+                       chunksize=1, out=res)
 
     ns_loop_ph = np.sum(res[:, 0, :, :,], axis=0)
     ns_loop_ph[ns_loop_ph==0] = np.nan # To avoid 0 division
@@ -455,9 +459,10 @@ def main(argv=None):
     print('with {} parallel processing...'.format(_n_para), flush=True)
 
     ### Parallel processing
-    p = q.Pool(_n_para)
-    loop_ph_rms_ifg2 = list(np.array(p.map(loop_closure_3rd_wrapper, range(n_loop)), dtype=np.float32))
-    p.close()
+    loop_ph_rms_ifg2 = list(np.array(
+        tools_lib.run_pool(loop_closure_3rd_wrapper, range(n_loop), _n_para,
+                           mem_per_worker_mb=mem_per_worker_mb),
+        dtype=np.float32))
 
     bad_ifg_cand2 = []
     good_ifg2 = []
@@ -525,9 +530,11 @@ def main(argv=None):
     print('with {} parallel processing...'.format(_n_para2), flush=True)
 
     ### Parallel processing
-    p = q.Pool(_n_para2)
-    res = np.array(p.map(loop_closure_4th_wrapper, args), dtype=np.int16)
-    p.close()
+    ## Stream results into preallocated res to save memory
+    res = np.empty((len(args), length, width), dtype=np.int16)
+    tools_lib.run_pool(loop_closure_4th_wrapper, args, _n_para2,
+                       mem_per_worker_mb=mem_per_worker_mb,
+                       chunksize=1, out=res)
 
     ns_loop_err = np.sum(res[:, :, :,], axis=0)
 

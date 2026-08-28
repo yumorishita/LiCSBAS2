@@ -58,7 +58,9 @@ def make_loop_matrix(ifgdates):
             Aline[ix_ifg13] = -1
             Aloop.append(Aline)
 
-    Aloop = np.array(Aloop)
+    ## int8 because the values are only 1, -1 and 0. Keeps the temporary
+    ## arrays derived from Aloop small (int64 by default).
+    Aloop = np.array(Aloop, dtype=np.int8)
 
     return Aloop
 

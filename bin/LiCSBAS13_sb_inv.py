@@ -108,7 +108,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.4"; date=20260320; author="Y. Morishita"
+    ver="1.5.5"; date=20260818; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -129,10 +129,6 @@ def main(argv=None):
     except:
         n_para = max(multi.cpu_count()-1, 1)
 
-    os.environ["OMP_NUM_THREADS"] = "1"
-    # Because np.linalg.lstsq use full CPU but not much faster than 1CPU.
-    # Instead parallelize by multiprocessing
-
     memory_size = 8000
     gamma = 0.0001
     n_unw_r_thre = []
@@ -142,7 +138,6 @@ def main(argv=None):
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
     cmap_wrap = tools_lib.get_cmap('cm_insar')
-    q = multi.get_context('fork')
     compress = 'gzip'
 
 
@@ -564,8 +559,8 @@ def main(argv=None):
                 # Number of ifgs for each loop at eath point.
                 # 3 means complete loop, 1 or 2 means broken loop.
                 ns_ifg4loop = cp.array([
-                        (cp.abs(Aloop_cp[i, :])*(~cp.isnan(unwpatch_cp))).sum(axis=1)
-                        for i in range(n_loop)])
+                        (cp.abs(Aloop_cp[i, :])*(~cp.isnan(unwpatch_cp))).sum(
+                            axis=1, dtype=cp.int16) for i in range(n_loop)])
                 bool_loop = (ns_ifg4loop==3)
                 #(n_loop,n_pt) identify complete loop only
 
@@ -574,7 +569,7 @@ def main(argv=None):
                 ns_loop4ifg = cp.array([(
                         (cp.abs(Aloop_cp[:, i])*bool_loop.T).T*
                         (~cp.isnan(unwpatch_cp[:, i]))
-                        ).sum(axis=0) for i in range(n_ifg)]) #
+                        ).sum(axis=0, dtype=cp.int32) for i in range(n_ifg)]) #
 
                 ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt
                 ns_nan_ifg = cp.isnan(unwpatch_cp).sum(axis=1) #n_pt, nan ifg count
@@ -599,10 +594,17 @@ def main(argv=None):
                       flush=True)
 
                 ### Devide unwpatch by n_para for parallel processing
-                p = q.Pool(n_para_gap)
-                _result = np.array(p.map(count_gaps_wrapper, range(n_para_gap)),
-                                   dtype=object)
-                p.close()
+                _n_loop = Aloop.shape[0] if len(Aloop) != 0 else 0
+                ### At peak count_gaps_wrapper holds ns_loop4ifg
+                ### (n_ifg, n_pt) int32, two int8 temporaries of (n_pt, n_loop)
+                ### each, bool_loop (n_loop, n_pt) and _gap_patch (n_im-1, n_pt)
+                _mem_per_worker_mb = ((4*n_ifg + 3*_n_loop + n_im)*
+                    np.ceil(n_pt_unnan/n_para_gap)/2**20)
+                _result = np.array(
+                    tools_lib.run_pool(count_gaps_wrapper, range(n_para_gap),
+                                       n_para_gap,
+                                       mem_per_worker_mb=_mem_per_worker_mb),
+                    dtype=object)
 
                 ns_gap_patch[ix_unnan_pt] = np.hstack(_result[:, 0]) #n_pt
                 gap_patch[:, ix_unnan_pt] = np.hstack(_result[:, 1]) #n_im-1, n_pt
@@ -798,21 +800,23 @@ def main(argv=None):
 
 
     #%% Output png images
+    ### Approx memory use per worker (MB): ~12 frames (inputs, wrapped
+    ### results, complex64 temporaries and matplotlib's float32 copy)
+    _mem_per_worker_png_mb = 12*length*width*4/2**20*1.5 ## 1.5 for margin
+
     ### Incremental displacement
     _n_para = n_im-1 if n_para > n_im-1 else n_para
     print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
-    p = q.Pool(_n_para)
-    p.map(inc_png_wrapper, range(n_im-1))
-    p.close()
+    tools_lib.run_pool(inc_png_wrapper, range(n_im-1), _n_para,
+                       mem_per_worker_mb=_mem_per_worker_png_mb)
 
     ### Residual for each ifg. png and txt.
     with open(restxtfile, "w") as f:
         print('# RMS of residual (mm)', file=f)
     _n_para = n_ifg if n_para > n_ifg else n_para
     print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
-    p = q.Pool(_n_para)
-    p.map(resid_png_wrapper, range(n_ifg))
-    p.close()
+    tools_lib.run_pool(resid_png_wrapper, range(n_ifg), _n_para,
+                       mem_per_worker_mb=_mem_per_worker_png_mb)
 
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
@@ -880,7 +884,8 @@ def count_gaps_wrapper(i):
     # 3 means complete loop, 1 or 2 means broken loop.
     ns_ifg4loop = np.array([(np.abs(Aloop[j, :])*
                          (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
-                            .sum(axis=1) for j in range(n_loop)])
+                            .sum(axis=1, dtype=np.int16) for j in range(n_loop)])
+                    ## int16: 0-3 ifgs in a loop
     bool_loop = (ns_ifg4loop==3) #(n_loop,n_pt) identify complete loop only
     del ns_ifg4loop
 
@@ -889,7 +894,8 @@ def count_gaps_wrapper(i):
     ns_loop4ifg = np.array([(
             (np.abs(Aloop[:, j])*bool_loop.T).T*
             (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, j]))
-            ).sum(axis=0) for j in range(n_ifg)]) #
+            ).sum(axis=0, dtype=np.int32) for j in range(n_ifg)]) #
+                    ## int32: counts loops, up to n_loop
     del bool_loop
 
     ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt

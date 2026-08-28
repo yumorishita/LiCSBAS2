@@ -1,4 +1,8 @@
 """Unit tests for LiCSBAS_tools_lib."""
+import pathlib
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -126,6 +130,83 @@ def test_convert_size():
     assert tools_lib.convert_size(1024) == '1.0KB'
     assert tools_lib.convert_size(1536) == '1.5KB'
     assert tools_lib.convert_size(5 * 1024**3) == '5.0GB'
+
+
+#%% run_pool
+def _square(i):
+    return i * i
+
+
+def _row(i):
+    return np.full(4, i, dtype=np.float32)
+
+
+def _pair(i):
+    return i, i * i
+
+
+@pytest.mark.parametrize('n_para', [1, 3])  # serial path and parallel path
+def test_run_pool_preserves_order(n_para):
+    assert tools_lib.run_pool(_square, range(50), n_para) \
+        == [i * i for i in range(50)]
+
+
+def test_run_pool_empty_args():
+    assert tools_lib.run_pool(_square, [], 4) == []
+
+
+def test_run_pool_out_streaming():
+    out = np.empty((10, 4), dtype=np.float32)
+    ret = tools_lib.run_pool(_row, range(10), 3, chunksize=1, out=out)
+    assert ret is out
+    expected = np.repeat(np.arange(10, dtype=np.float32)[:, None], 4, axis=1)
+    np.testing.assert_array_equal(out, expected)
+
+
+def test_run_pool_store():
+    firsts = np.empty(10, dtype=np.int64)
+    seconds = np.empty(10, dtype=np.int64)
+
+    def store(i, result):
+        firsts[i], seconds[i] = result
+
+    tools_lib.run_pool(_pair, range(10), 3, store=store)
+    np.testing.assert_array_equal(firsts, np.arange(10))
+    np.testing.assert_array_equal(seconds, np.arange(10) ** 2)
+
+
+def test_run_pool_mem_cap(capsys):
+    # Absurdly large per-worker memory must cap n_para to 1 but still work
+    result = tools_lib.run_pool(_square, range(10), 4,
+                                mem_per_worker_mb=10**12)
+    assert result == [i * i for i in range(10)]
+    assert 'Reduce n_para' in capsys.readouterr().out
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='needs SIGKILL')
+def test_run_pool_dead_worker_raises_instead_of_hanging():
+    # A worker killed mid-map (like by the OOM killer) must raise a clear
+    # error. Run in a subprocess with a hard timeout so that a regression
+    # (hang, as plain Pool.map does) can never hang the test session.
+    lib_dir = str(pathlib.Path(__file__).resolve().parent.parent
+                  / 'LiCSBAS_lib')
+    code = '\n'.join([
+        'import os, signal, sys, time',
+        'sys.path.insert(0, {!r})'.format(lib_dir),
+        'import LiCSBAS_tools_lib as tools_lib',
+        'def f(i):',
+        '    if i == 3: os.kill(os.getpid(), signal.SIGKILL)',
+        '    time.sleep(0.01)',
+        '    return i',
+        'try:',
+        '    tools_lib.run_pool(f, range(8), 2, chunksize=1)',
+        'except RuntimeError as e:',
+        '    assert "n_para" in str(e)',
+        '    print("OK")',
+    ])
+    res = subprocess.run([sys.executable, '-c', code], timeout=60,
+                         capture_output=True, text=True)
+    assert 'OK' in res.stdout, res.stderr
 
 
 #%% calculate_common_geometry

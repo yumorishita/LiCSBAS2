@@ -2,7 +2,7 @@
 """
 Python3 library of time series analysis tools for LiCSBAS.
 
-v1.11.0 20260811 Yu Morishita
+v1.12.0 20260818 Yu Morishita
 """
 import os
 import sys
@@ -648,6 +648,103 @@ def get_patchrow(width, length, n_data, memory_size):
 
     return n_patch, patchrow
 
+
+#%%
+def _limit_worker_threads():
+    ### Initializer for run_pool workers: limit BLAS/OpenMP to 1 thread to
+    ### avoid oversubscription (n_para workers x N BLAS threads). Must run
+    ### in the worker itself because the OpenMP limit is thread-local and
+    ### does not reliably survive fork. Keep a global reference so the
+    ### limit is not undone by garbage collection.
+    global _worker_thread_limit
+    try:
+        from threadpoolctl import threadpool_limits
+        _worker_thread_limit = threadpool_limits(limits=1)
+    except ImportError:  ## Same behavior as before, only risking slowdown
+        pass
+
+
+def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
+             out=None, store=None):
+    """
+    Robust replacement of multiprocessing fork Pool(n_para).map(func, args).
+
+    - Forks workers so that func can use global variables set in the caller
+      (same semantics as the conventional fork Pool in LiCSBAS).
+    - If mem_per_worker_mb is given, n_para is capped just before execution
+      based on the currently available memory to avoid OOM.
+    - If a worker dies unexpectedly (e.g., killed by the OS out-of-memory
+      killer), raise RuntimeError with advice instead of hanging forever.
+    - If out is given, results are stored one by one as out[i] = result
+      (streaming; avoids materializing all results at a time).
+    - If store is given, store(i, result) is called instead (e.g., for
+      functions returning tuples). store overrides out.
+    - If n_para == 1, run serially without forking.
+    - Each worker limits its BLAS/OpenMP threads to 1 (if threadpoolctl is
+      available) to avoid oversubscription by n_para workers x N BLAS
+      threads. The parent is not affected, so serial BLAS calls in the
+      caller stay multi-threaded.
+
+    Returns:
+        list of results in the order of args, or out if out is given, or
+        None if store is given (the caller stores the results itself)
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures.process import BrokenProcessPool
+    import multiprocessing as multi
+    import psutil
+
+    args = list(args)
+    n_task = len(args)
+    if n_task == 0:
+        return [] if (out is None and store is None) else out
+    n_para = max(1, min(int(n_para), n_task))
+
+    ### Cap n_para by memory available now
+    if mem_per_worker_mb:
+        mem_avail = psutil.virtual_memory().available / 2**20  # MB
+        n_para_mem = max(1, int(mem_avail / 2 / mem_per_worker_mb))
+        if n_para_mem < n_para:
+            print('  Reduce n_para from {} to {} due to available memory '
+                  '({:.0f} MB, ~{:.0f} MB/worker)'.format(
+                      n_para, n_para_mem, mem_avail, mem_per_worker_mb),
+                  flush=True)
+            n_para = n_para_mem
+
+    if store is None and out is not None:
+        def store(i, r): out[i] = r
+
+    def _consume(iterator):
+        if store is None:
+            return list(iterator)
+        for i, r in enumerate(iterator):
+            store(i, r)
+        return out
+
+    if n_para == 1:  ## Serial, no fork
+        return _consume(map(func, args))
+
+    if chunksize is None:  ## Mimic default of Pool.map
+        chunksize = -(-n_task // (n_para*4))
+
+    ctx = multi.get_context('fork')
+    try:
+        with ProcessPoolExecutor(max_workers=n_para, mp_context=ctx,
+                                 initializer=_limit_worker_threads) as p:
+            return _consume(p.map(func, args, chunksize=chunksize))
+    except BrokenProcessPool as e:
+        raise RuntimeError(
+            'A worker process died unexpectedly ({}).\n'
+            'The most common cause is the OS out-of-memory (OOM) killer when '
+            'memory ran out (check with e.g.\n'
+            '`dmesg -T | grep -i "killed process"`), but a crash inside the '
+            'worker itself looks the same here.\n'
+            'If it was memory, try one of the following and rerun:\n'
+            '  - Reduce the number of parallel workers (--n_para)\n'
+            '  - Reduce memory use (--mem_size if the script has it, or '
+            'reduce the data size in step02 or step05)\n'
+            '  - Close other programs or use a machine with more memory'
+            .format(type(e).__name__)) from e
 
 
 #%%

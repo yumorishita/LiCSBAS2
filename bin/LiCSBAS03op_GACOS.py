@@ -132,7 +132,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.7"; date=20250715; author="Y. Morishita"
+    ver="1.5.8"; date=20260818; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -153,7 +153,6 @@ def main(argv=None):
     except:
         n_para = multi.cpu_count() - 1
 
-    q = multi.get_context('fork')
     cmap_wrap = tools_lib.get_cmap('cm_insar')
 
     #%% Read options
@@ -277,9 +276,11 @@ def main(argv=None):
             _n_para = n_para
 
         print('  {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
-        no_gacos_imds = p.map(convert_wrapper, range(n_im2))
-        p.close()
+        ### ~8 float32 frames per worker (gdal.Warp MEM, sltd, png)
+        _mem_per_worker_mb = 8*length_geo*width_geo*4/2**20
+        no_gacos_imds = tools_lib.run_pool(convert_wrapper, range(n_im2),
+                                           _n_para,
+                                           mem_per_worker_mb=_mem_per_worker_mb)
 
         for imd in no_gacos_imds:
             if imd is not None:
@@ -319,9 +320,11 @@ def main(argv=None):
             _n_para = n_para
 
         print('  {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
-        _return = p.map(correct_wrapper, range(n_ifg2))
-        p.close()
+        ### ~8 float32 frames per worker (sltd, unw, unw_cor, png)
+        _mem_per_worker_mb = 8*max(length_geo*width_geo,
+                                   length_unw*width_unw)*4/2**20
+        _return = tools_lib.run_pool(correct_wrapper, range(n_ifg2), _n_para,
+                                     mem_per_worker_mb=_mem_per_worker_mb)
 
         for i in range(n_ifg2):
             if _return[i][0] == 1:
