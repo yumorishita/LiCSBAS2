@@ -60,6 +60,34 @@ def test_plot_network_with_removed(tmp_path):
     _assert_png(png)
 
 
+def test_plot_network_passes_locator_to_date_formatter(tmp_path):
+    # plot_network used to pass the return value of set_major_locator()
+    # (which is always None) into ConciseDateFormatter, leaving the
+    # formatter without a locator. matplotlib <=3.10 tolerated it, 3.11
+    # raises AttributeError while drawing. Capture what plot_network
+    # actually hands to the formatter so the bug cannot come back.
+    import matplotlib.dates as mdates
+
+    captured = []
+    orig = mdates.ConciseDateFormatter
+
+    class Spy(orig):
+        def __init__(self, locator, *args, **kwargs):
+            captured.append(locator)
+            super().__init__(locator, *args, **kwargs)
+
+    mdates.ConciseDateFormatter = Spy
+    try:
+        plot_lib.plot_network(synth.IFGDATES, synth.BPERP, [],
+                              str(tmp_path / 'network_loc.png'))
+    finally:
+        mdates.ConciseDateFormatter = orig
+
+    assert captured, 'ConciseDateFormatter was never constructed'
+    assert isinstance(captured[0], mdates.DateLocator), \
+        'plot_network passed {!r} instead of a locator'.format(captured[0])
+
+
 def test_plot_hgt_corr(tmp_path):
     rng = np.random.default_rng(1)
     n = 200
