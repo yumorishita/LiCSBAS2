@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.1.2 20210323 Yu Morishita
+v1.1.3 20260829 Yu Morishita
 
 This script checks if LiCSBAS install is OK or not.
 
@@ -16,14 +16,20 @@ import sys
 #%% Main
 if __name__ == "__main__":
     flag = True
+    ## Keep in sync with LiCSBAS.yml and requirements.txt
     modules = ['astropy',
                 'bs4',
+                'dateutil',
                 'h5py',
                 'matplotlib',
                 'numpy',
+                'pandas',
                 'psutil',
                 'requests',
+                'shapely',
                 'statsmodels',
+                'threadpoolctl',
+                'yaml',
                ]
 
 
@@ -44,7 +50,7 @@ if __name__ == "__main__":
             print('  ERROR: {}'.format(err))
             flag = False
         else:
-            ver = imported.__version__
+            ver = getattr(imported, '__version__', 'unknown')
             print('  {}({}) OK'.format(module, ver))
 
 
