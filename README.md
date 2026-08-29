@@ -12,6 +12,33 @@ Users can easily derive the time series and velocity of the displacement if suff
 
 THIS IS RESEARCH CODE PROVIDED TO YOU "AS IS" WITH NO WARRANTIES OF CORRECTNESS. USE AT YOUR OWN RISK.
 
+## Installation
+
+Create the conda environment from `LiCSBAS.yml` (conda-forge, python 3.12
+or newer), then add `bashrc_LiCSBAS.sh` to your shell:
+
+```bash
+conda env create -f LiCSBAS.yml
+conda activate licsbas2
+source bashrc_LiCSBAS.sh
+LiCSBAS_check_install.py   # verify the installation
+```
+
+`requirements.txt` mirrors the same dependencies for non-conda setups.
+Both give lower bounds rather than exact versions, so a fresh install
+gets current packages; the combination last verified by the maintainers
+is recorded in a comment at the top of `LiCSBAS.yml`.
+
+### GPU (optional)
+
+Steps 13 and 14 accept `--gpu`, which needs [CuPy](https://cupy.dev/) and
+an NVIDIA GPU with CUDA. CuPy is not part of `LiCSBAS.yml` because it
+cannot be installed without a GPU; add it separately:
+
+```bash
+conda install -c conda-forge cupy
+```
+
 ## Documentation and Bug Reports
 
 WIP

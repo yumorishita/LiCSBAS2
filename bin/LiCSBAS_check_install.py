@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.1.3 20260829 Yu Morishita
+v1.2.0 20260829 Yu Morishita
 
 This script checks if LiCSBAS install is OK or not.
 
@@ -33,10 +33,11 @@ if __name__ == "__main__":
                ]
 
 
+    py_min = (3, 12)
     print('\nPython version: {}'.format(platform.python_version()))
-    pyver = platform.python_version_tuple()
-    if int(pyver[0]) < 3 or int(pyver[1]) < 6:
-        print('  ERROR: must be >= 3.6'.format())
+    pyver = tuple(int(v) for v in platform.python_version_tuple()[:2])
+    if pyver < py_min:
+        print('  ERROR: must be >= {}.{}'.format(*py_min))
         flag = False
     else:
         print('  OK')
@@ -60,13 +61,12 @@ if __name__ == "__main__":
         print('  ERROR: {}'.format(err))
         flag = False
     else:
-        _ver = imported.VersionInfo()
-        ver1 = int(_ver[0])
-        ver2 = int(_ver[1:3])
-        ver3 = int(_ver[3:5])
-        ver = '{}.{}.{}'.format(ver1, ver2, ver3)
-        if ver1 <= 2 and ver2 <= 3:
-            print('  ERROR: gdal ver is {} but must be >= 2.4'.format(ver))
+        gdal_min = (3, 6)
+        gdalver = tuple(int(v) for v in imported.__version__.split('.')[:2])
+        ver = imported.__version__
+        if gdalver < gdal_min:
+            print('  ERROR: gdal ver is {} but must be >= {}.{}'.format(
+                ver, *gdal_min))
             flag = False
         else:
             print('  gdal({}) OK'.format(ver))
