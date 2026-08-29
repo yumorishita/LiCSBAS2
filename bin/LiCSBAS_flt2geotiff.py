@@ -43,7 +43,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.1"; date=20210209; author="Y. Morishita"
+    ver="1.5.2"; date=20260829; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -147,6 +147,7 @@ def main(argv=None):
         print('Use gdal module')
         try:
             from osgeo import gdal, osr
+            gdal.UseExceptions()
         except:
             print("\nERROR: gdal must be installed.", file=sys.stderr)
             return 1

@@ -2,7 +2,7 @@
 """
 Python3 library of plot functions for LiCSBAS.
 
-v1.3.3 20250918 Yu Morishita
+v1.3.4 20260829 Yu Morishita
 
 """
 import os
@@ -31,7 +31,9 @@ def make_im_png(data, pngfile, cmap, title, vmin=None, vmax=None, cbar=True):
 
     if cmap=='insar':
         cdict = tools_lib.cmap_insar()
-        plt.register_cmap(cmap=mpl.colors.LinearSegmentedColormap('insar', cdict))
+        if 'insar' not in plt.colormaps():
+            mpl.colormaps.register(
+                mpl.colors.LinearSegmentedColormap('insar', cdict), name='insar')
         interp = 'nearest'
     else:
         interp = 'nearest' #'antialiased'
@@ -70,7 +72,9 @@ def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
     ### Plot setting
     if cmap=='insar':
         cdict = tools_lib.cmap_insar()
-        plt.register_cmap(cmap=mpl.colors.LinearSegmentedColormap('insar', cdict))
+        if 'insar' not in plt.colormaps():
+            mpl.colormaps.register(
+                mpl.colors.LinearSegmentedColormap('insar', cdict), name='insar')
         interp = 'nearest'
     else:
         interp = 'nearest' #'antialiased'
@@ -283,14 +287,9 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True):
                    zorder=1, label='Gap', alpha=0.6, colors='k', linewidth=3)
 
     ### Locater
-    loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-    try:  # Only support from Matplotlib 3.1
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
-    except:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-        for label in ax.get_xticklabels():
-            label.set_rotation(20)
-            label.set_horizontalalignment('right')
+    loc = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(loc)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
     ax.grid(which='major')
 
     ### Add bold line every 1yr
