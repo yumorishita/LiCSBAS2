@@ -41,6 +41,10 @@ import matplotlib as mpl
 import LiCSBAS_tools_lib as tools_lib
 from osgeo import gdal
 
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
+
 class Usage(Exception):
     """Usage context manager"""
     def __init__(self, msg):
@@ -53,7 +57,7 @@ if __name__ == "__main__":
     argv = sys.argv
 
     start = time.time()
-    ver="1.4.1"; date=20250715; author="Y. Morishita"
+    ver="1.4.2"; date=20260829; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 

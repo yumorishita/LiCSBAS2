@@ -64,6 +64,10 @@ import sys
 import time
 
 from osgeo import gdal
+
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
 import numpy as np
 
 # %% Functions
@@ -463,7 +467,7 @@ def main(indir='.', outdir='GEOC', crop_geo=None, cc_thresh=0.5,
 if __name__ == '__main__':
     start = time.time()
     prog = os.path.basename(sys.argv[0])
-    print(f"\n{prog} ver1.0.0 20251016 Y. Morishita")
+    print(f"\n{prog} ver1.0.1 20260829 Y. Morishita")
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     # Read args

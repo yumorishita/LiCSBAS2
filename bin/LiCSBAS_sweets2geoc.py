@@ -43,6 +43,10 @@ import tempfile
 import time
 
 from osgeo import gdal
+
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
 import numpy as np
 
 
@@ -74,9 +78,10 @@ def write_geotiff(path, arr, gt, proj, dtype=gdal.GDT_Float32, nodata=0.0, optio
             os.remove(tmp_path)
 
     # make failures loud rather than leaving a silently broken file
-    ds_check = gdal.Open(path)
-    if ds_check is None:
-        raise IOError(f'Failed to write a valid GeoTIFF: {path}')
+    try:
+        ds_check = gdal.Open(path)
+    except RuntimeError as e:  ## gdal.UseExceptions() is on
+        raise IOError(f'Failed to write a valid GeoTIFF: {path}') from e
     ds_check = None
 
 
@@ -474,7 +479,7 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.3, n_workers=None,
 if __name__ == '__main__':
     start = time.time()
     prog = os.path.basename(sys.argv[0])
-    print(f"\n{prog} ver1.1.0 20260811 Y. Morishita")
+    print(f"\n{prog} ver1.1.1 20260829 Y. Morishita")
     print(f"{prog} {' '.join(sys.argv[1:])}\n")
 
     # Show argparse defaults in help messages

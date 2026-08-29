@@ -35,6 +35,10 @@ import time
 import shutil
 import glob
 from osgeo import gdal
+
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
 import numpy as np
 import subprocess as subp
 import multiprocessing as multi
@@ -53,7 +57,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver='1.0.5'; date=20250715; author="Y. Morishita"
+    ver='1.0.6'; date=20260829; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -102,8 +106,11 @@ def main(argv=None):
             raise Usage('No input file given, -i is not optional!')
         elif not os.path.exists(infile):
             raise Usage('No {} exists!'.format(infile))
-        elif gdal.Open(infile) is None:
-            raise Usage('{} is not GeoTIFF!'.format(infile))
+        else:
+            try:
+                gdal.Open(infile)
+            except RuntimeError:  ## gdal.UseExceptions() is on
+                raise Usage('{} is not GeoTIFF!'.format(infile))
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')

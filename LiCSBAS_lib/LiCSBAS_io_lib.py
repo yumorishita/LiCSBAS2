@@ -2,7 +2,7 @@
 """
 Python3 library of input/output functions for LiCSBAS.
 
-v1.5 20260811 Yu Morishita
+v1.6 20260829 Yu Morishita
 
 """
 import sys
@@ -11,6 +11,10 @@ import subprocess as subp
 import datetime as dt
 import statsmodels.api as sm
 from osgeo import gdal, osr
+
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
 
 
 #%%
@@ -252,9 +256,10 @@ def get_param_par(mlipar, field):
 #%%
 def get_geotiff_info(tif_path):
     """Get geotransform, projection, and shape from a geotiff."""
-    ds = gdal.Open(tif_path)
-    if ds is None:
-        raise ValueError(f"Cannot open {tif_path}")
+    try:
+        ds = gdal.Open(tif_path)
+    except RuntimeError as e:  ## gdal.UseExceptions() is on
+        raise ValueError(f"Cannot open {tif_path}") from e
     gt = ds.GetGeoTransform()
     proj = ds.GetProjection()
     shape = (ds.RasterYSize, ds.RasterXSize)
@@ -272,8 +277,9 @@ def resample_geotiff(src_path, dst_path, new_gt, new_shape, proj, dtype=None, no
         Resampling algorithm to use. If a string is provided, it is mapped to a
         GDAL resampling constant. The default is 'cubic'.
     """
-    src_ds = gdal.Open(src_path)
-    if src_ds is None:
+    try:
+        src_ds = gdal.Open(src_path)
+    except RuntimeError:  ## gdal.UseExceptions() is on
         return False
 
     if dtype is None:

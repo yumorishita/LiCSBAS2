@@ -58,6 +58,10 @@ import time
 import numpy as np
 from osgeo import gdal
 
+### Raise exceptions on GDAL errors instead of returning None.
+### Required from GDAL 3.7 (FutureWarning) and the default in GDAL 4.0.
+gdal.UseExceptions()
+
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -132,7 +136,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.8"; date=20260818; author="Y. Morishita"
+    ver="1.5.9"; date=20260829; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
