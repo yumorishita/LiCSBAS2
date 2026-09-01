@@ -1,3 +1,10 @@
+# For non-conda setups. With conda, use LiCSBAS.yml instead:
+#     conda env create -f LiCSBAS.yml
+# Do not `conda install --file requirements.txt` into an existing
+# environment: mixing its channel with conda-forge, and changing the python
+# version in place, can make the solve take hours. Create a new environment
+# from LiCSBAS.yml instead, which pins the channel to conda-forge.
+#
 # Mirror of the dependencies in LiCSBAS.yml (see there for the rationale
 # behind the bounds and for the last verified version combination).
 python>=3.12

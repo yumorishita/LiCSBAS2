@@ -29,6 +29,23 @@ Both give lower bounds rather than exact versions, so a fresh install
 gets current packages; the combination last verified by the maintainers
 is recorded in a comment at the top of `LiCSBAS.yml`.
 
+Create a new environment as above rather than running
+`conda install --file requirements.txt` into an existing one: mixing
+that environment's channel with conda-forge, and changing its python
+version in place, can make the solve take hours. `LiCSBAS.yml` pins the
+channel to conda-forge, which avoids this.
+
+A conda older than 22.11 has no libmamba solver and can take hours on
+this environment. Check with `conda --version`, and either update conda
+or use [micromamba](https://mamba.readthedocs.io/), which needs no
+changes to an existing conda install:
+
+```bash
+curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+    | tar -xvj bin/micromamba
+./bin/micromamba create -f LiCSBAS.yml -y
+```
+
 ### GPU (optional)
 
 Steps 13 and 14 accept `--gpu`, which needs [CuPy](https://cupy.dev/) and
