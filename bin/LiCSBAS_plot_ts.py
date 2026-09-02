@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.4"; date=20260901; author="Y. Morishita"
+    ver="1.14.5"; date=20260902; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -582,6 +582,14 @@ if __name__ == "__main__":
     tslider = Slider(axtim, 'yr', imdates_ordinal[0]-3, imdates_ordinal[-1]+3, valinit=imdates_ordinal[ix_m], valfmt='') #%0.0f
     tslider.ax.bar(imdates_ordinal, np.ones(len(imdates_ordinal)), facecolor='black', width=4)
     tslider.ax.bar(imdates_ordinal[ix_m], 1, facecolor='red', width=8)
+
+    ### Slider turns the axis off in its constructor, which hides the date
+    ### ticks. Turn it back on, keeping the slider's minimal appearance.
+    tslider.ax.set_axis_on()
+    tslider.ax.get_yaxis().set_visible(False)
+    for spine in tslider.ax.spines.values():
+        spine.set_visible(False)
+    tslider.ax.tick_params(labelsize=8)
 
     loc_tslider = mdates.AutoDateLocator()
     tslider.ax.xaxis.set_major_locator(loc_tslider)
