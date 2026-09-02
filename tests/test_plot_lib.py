@@ -123,3 +123,30 @@ def test_make_loop_png(tmp_path):
     loop_lib.make_loop_png(unw12, unw23, unw13, loop_ph, str(png),
                            ['12', '23', '13', 'loop'], 3)
     _assert_png(png)
+
+
+#%% Repo-wide guard for a bug class, not a single call site
+def test_no_setter_return_values_used_as_locators():
+    # matplotlib's Axis.set_major_locator() returns None, so
+    #     loc = ax.xaxis.set_major_locator(AutoDateLocator())
+    #     ax.xaxis.set_major_formatter(ConciseDateFormatter(loc))
+    # leaves the formatter without a locator. matplotlib <=3.10 tolerated
+    # it; 3.11 raises AttributeError while drawing. This existed in both
+    # plot_lib.plot_network and LiCSBAS_plot_ts.py, so guard the pattern
+    # across the whole repo rather than one call site at a time.
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pattern = re.compile(
+        r'^\s*[A-Za-z_]\w*\s*=\s*[\w.]+\.set_(major|minor)_(locator|formatter)\(')
+    offenders = []
+    for d in ('bin', 'LiCSBAS_lib'):
+        for f in sorted((root / d).glob('*.py')):
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                if pattern.match(line):
+                    offenders.append('{}:{}'.format(f.relative_to(root), n))
+    assert not offenders, (
+        'set_major/minor_locator/formatter returns None; assigning it and '
+        'passing it on leaves the formatter without a locator: '
+        + ', '.join(offenders))
