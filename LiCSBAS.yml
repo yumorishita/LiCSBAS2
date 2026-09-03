@@ -1,19 +1,34 @@
+# Conda environment for LiCSBAS2.
+#
+# Lower bounds only, so that a fresh install gets current packages and CI
+# (which builds this same file) reports upstream breakage early. Bounds are
+# set only where a specific version is actually required; python>=3.12
+# already keeps the rest recent.
+#
+# Last verified (2026-08-29): full test suite on python 3.12.14, 3.13.15
+# and 3.14.7, plus a numerical regression on real data, with numpy 2.5.2,
+# matplotlib 3.11.1, gdal 3.13.3, h5py 3.16.0, astropy 8.0.1,
+# statsmodels 0.15.0, pandas 3.0.5, shapely 2.1.2, psutil 7.2.2.
 name: licsbas2
 channels:
-  - defaults
+  - conda-forge
 dependencies:
-  - python=3.10.16
-  - astropy=6.1.3
-  - beautifulsoup4=4.12.3
-  - gdal=3.6.2
-  - h5py=3.12.1
-  - matplotlib=3.7.1
-  - numpy=1.26.4
-  - pandas=2.2.3
-  - psutil=5.9.0
-  - python-dateutil=2.9.0
-  - pyyaml=6.0.2
-  - requests=2.32.3
-  - shapely=2.0.6
-  - statsmodels=0.14.4
-  - threadpoolctl=3.5.0
+  - python>=3.12
+  - astropy
+  - beautifulsoup4
+  - gdal>=3.6          # gdal.UseExceptions() error behavior
+  - h5py
+  - matplotlib>=3.6    # mpl.colormaps.register()
+  - numpy>=2
+  - pandas
+  - psutil
+  - python-dateutil
+  - pyyaml
+  - requests
+  - shapely>=2
+  - statsmodels
+  - threadpoolctl
+  ## Optional, for the --gpu option of steps 13 and 14.
+  ## Needs an NVIDIA GPU and CUDA, so it is not installed by default:
+  ##   conda install -c conda-forge cupy
+  # - cupy>=14

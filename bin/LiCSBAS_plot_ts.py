@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.3"; date=20250725; author="Y. Morishita"
+    ver="1.14.5"; date=20260902; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -583,15 +583,17 @@ if __name__ == "__main__":
     tslider.ax.bar(imdates_ordinal, np.ones(len(imdates_ordinal)), facecolor='black', width=4)
     tslider.ax.bar(imdates_ordinal[ix_m], 1, facecolor='red', width=8)
 
-    # Not working... don't know why
-    loc_tslider =  tslider.ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-    try: # Only support from Matplotlib 3.1!
-        tslider.ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_tslider))
-    except:
-        tslider.ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-        for label in tslider.ax.get_xticklabels():
-            label.set_rotation(20)
-            label.set_horizontalalignment('right')
+    ### Slider turns the axis off in its constructor, which hides the date
+    ### ticks. Turn it back on, keeping the slider's minimal appearance.
+    tslider.ax.set_axis_on()
+    tslider.ax.get_yaxis().set_visible(False)
+    for spine in tslider.ax.spines.values():
+        spine.set_visible(False)
+    tslider.ax.tick_params(labelsize=8)
+
+    loc_tslider = mdates.AutoDateLocator()
+    tslider.ax.xaxis.set_major_locator(loc_tslider)
+    tslider.ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_tslider))
 
     dstr_ref = imdates_dt[ix_m].strftime('%Y/%m/%d')
     ### Slide bar action
@@ -627,14 +629,9 @@ if __name__ == "__main__":
     axts.set_xlabel('Time')
     axts.set_ylabel('Displacement (mm)')
 
-    loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
-    try:  # Only support from Matplotlib 3.1
-        axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
-    except:
-        axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-        for label in axts.get_xticklabels():
-            label.set_rotation(20)
-            label.set_horizontalalignment('right')
+    loc_ts = mdates.AutoDateLocator()
+    axts.xaxis.set_major_locator(loc_ts)
+    axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
 
     ### Ref info at side
     axtref = pts.text(0.83, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
@@ -721,13 +718,8 @@ if __name__ == "__main__":
             pts.canvas.draw()
             return
 
-        try: # Only support from Matplotlib 3.1!
-            axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
-        except:
-            axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-            for label in axts.get_xticklabels():
-                label.set_rotation(20)
-                label.set_horizontalalignment('right')
+        axts.xaxis.set_major_locator(loc_ts)
+        axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
 
 
         ### If not masked

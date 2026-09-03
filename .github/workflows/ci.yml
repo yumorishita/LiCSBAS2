@@ -8,7 +8,20 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Lowest python LiCSBAS.yml allows, to keep that bound honest.
+          - name: 'python 3.12 (minimum)'
+            python: 'python=3.12'
+          # No constraint: whatever conda-forge currently resolves to, which
+          # is what a fresh `conda env create -f LiCSBAS.yml` gives users.
+          # Needs no edit when a new python is released.
+          - name: 'python latest'
+            python: ''
     defaults:
       run:
         shell: bash -el {0}
@@ -16,7 +29,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mamba-org/setup-micromamba@v2
         with:
-          environment-file: .github/environment-ci.yml
+          environment-file: LiCSBAS.yml
+          # Test the environment users actually get, plus pytest. The python
+          # version comes from the matrix; LiCSBAS.yml only sets a lower bound.
+          create-args: >-
+            ${{ matrix.python }}
+            pytest
           cache-environment: true
       - name: Run tests
         env:

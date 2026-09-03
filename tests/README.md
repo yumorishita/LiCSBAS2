@@ -7,13 +7,18 @@ tens of seconds.
 ## Running
 
 ```bash
-python -m pip install pytest   # once, into the LiCSBAS conda env
-python -m pytest               # whole suite (~30 s)
-python -m pytest -m "not smoke"  # fast unit tests only (~5 s)
+conda install -c conda-forge pytest   # once, into the LiCSBAS conda env
+python -m pytest                      # whole suite (~30 s)
+python -m pytest -m "not smoke"       # fast unit tests only (~5 s)
 ```
 
 `LiCSBAS_lib` is put on the import path by `pytest.ini`/`conftest.py`,
 so sourcing `bashrc_LiCSBAS.sh` is not required.
+
+CI builds `LiCSBAS.yml` (the same environment users get) plus pytest, on
+every python version in the matrix in `.github/workflows/ci.yml`. Because
+`LiCSBAS.yml` sets only lower bounds, CI installs current releases and so
+also acts as an early warning when a new upstream release breaks LiCSBAS.
 
 ## Layout
 
