@@ -75,7 +75,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.7"; date=20260829; author="Y. Morishita"
+    ver="1.7.8"; date=20260905; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -95,7 +95,6 @@ def main(argv=None):
     cmap_wrap = tools_lib.get_cmap('cm_insar')
     cycle = 3
     n_valid_thre = 0.5
-    q = multi.get_context('fork')
 
 
     #%% Read options
@@ -258,11 +257,39 @@ def main(argv=None):
         if n_para > n_ifg2:
             n_para = n_ifg2
 
+        ### Size of the input geotiff, for the memory estimate below
+        width_in = length_in = 0
+        for ifgd in ifgdates2:
+            try:
+                geotiff = gdal.Open(os.path.join(geocdir, ifgd,
+                                                 ifgd+'.geo.unw.tif'))
+            except RuntimeError: ## not exist or broken
+                continue
+            width_in = geotiff.RasterXSize
+            length_in = geotiff.RasterYSize
+            geotiff = None
+            break
+
+        ### Approx memory use per worker (MB). n_para is capped by
+        ### tools_lib.run_pool with this value and the memory available at
+        ### the time of the parallel processing. The two stages of
+        ### convert_wrapper do not overlap, but the memory of the first is
+        ### not necessarily returned to the OS, so they are summed:
+        ###  - read and multilook: ~3 float32 frames of the input size (unw,
+        ###    the copy np.nanmean makes, and the unw==0 and isnan masks)
+        ###  - png: ~6 float32 frames of the output size (unw, the complex64
+        ###    temporaries of the wrapping, np.angle's output, and
+        ###    matplotlib's own copy)
+        ### 0 (i.e. no cap) if no readable geotiff was found.
+        _length_out = int(length_in/nlook)
+        _width_out = int(width_in/nlook)
+        _mem_per_worker_mb = (3*length_in*width_in +
+                              6*_length_out*_width_out)*4/2**20
+
         ### Create float with parallel processing
         print('  {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        rc = p.map(convert_wrapper, range(n_ifg2))
-        p.close()
+        rc = tools_lib.run_pool(convert_wrapper, range(n_ifg2), n_para,
+                                mem_per_worker_mb=_mem_per_worker_mb)
 
         ifgd_ok = []
         for i, _rc in enumerate(rc):
@@ -410,14 +437,17 @@ def convert_wrapper(i):
         cc[cc==0] = np.nan
         cc = tools_lib.multilook(cc, nlook, nlook, n_valid_thre)
 
-    ### Output float
-    unw.tofile(unwfile)
+    ### Output cc
     cc = cc.astype(np.uint8) ##nan->0, max255, auto-floored
     cc.tofile(ccfile)
 
     ### Make png
     unwpngfile = os.path.join(ifgdir1, ifgd+'.unw.png')
     plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), unwpngfile, cmap_wrap, ifgd+'.unw', vmin=-np.pi, vmax=np.pi, cbar=False)
+
+    ### Output float last, so that unw does not exist if this worker is
+    ### killed (e.g. by the OOM killer) and the ifg is redone on a rerun
+    unw.tofile(unwfile)
 
     return 0
 
