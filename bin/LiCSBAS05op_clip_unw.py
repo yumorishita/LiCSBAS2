@@ -64,7 +64,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.2.6"; date=20250715; author="Y. Morishita"
+    ver="1.2.7"; date=20260905; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -82,7 +82,6 @@ def main(argv=None):
     except:
         n_para = max(multi.cpu_count()-1, 1)
 
-    q = multi.get_context('fork')
     cmap_wrap = tools_lib.get_cmap('cm_insar')
 
 
@@ -264,9 +263,19 @@ def main(argv=None):
             n_para = n_ifg2
 
         print('  {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        p.map(clip_wrapper, range(n_ifg2))
-        p.close()
+        ### Approx memory use per worker (MB). n_para is capped by
+        ### tools_lib.run_pool with this value and the memory available at
+        ### the time of the parallel processing:
+        ###  - 2 float32 frames of the input size: unw and coh are read at
+        ###    full size before being clipped, and freeing them does not
+        ###    lower the peak RSS of the worker
+        ###  - ~6 float32 frames of the clipped size for the png stage (the
+        ###    complex64 temporaries of the wrapping, np.angle's output,
+        ###    and matplotlib's own copy)
+        _mem_per_worker_mb = (2*length*width +
+                              6*length_c*width_c)*4/2**20
+        tools_lib.run_pool(clip_wrapper, range(n_ifg2), n_para,
+                           mem_per_worker_mb=_mem_per_worker_mb)
 
 
     #%% Finish
@@ -289,8 +298,14 @@ def clip_wrapper(ifgix):
     unwfile = os.path.join(in_dir, ifgd, ifgd+'.unw')
     ccfile = os.path.join(in_dir, ifgd, ifgd+'.cc')
 
+    ### Read and clip. Copy because a slice is only a view, which would
+    ### keep the full-size array alive and, worse, make tofile write the
+    ### data element by element (10x slower on a local disk, ~80x on a
+    ### network/shared filesystem)
     unw = io_lib.read_img(unwfile, length, width)
     unw[unw==0] = np.nan
+    unw = unw[y1:y2, x1:x2].copy()
+
     if os.path.getsize(ccfile) == length*width:
         ccformat = np.uint8
     elif os.path.getsize(ccfile) == length*width*4:
@@ -299,22 +314,22 @@ def clip_wrapper(ifgix):
         print("ERROR: unkown file format for {}".format(ccfile), file=sys.stderr)
         return
     coh = io_lib.read_img(ccfile, length, width, dtype=ccformat)
-
-    ### Clip
-    unw = unw[y1:y2, x1:x2]
-    coh = coh[y1:y2, x1:x2]
+    coh = coh[y1:y2, x1:x2].copy()
 
     ### Output
     out_dir1 = os.path.join(out_dir, ifgd)
     if not os.path.exists(out_dir1): os.mkdir(out_dir1)
 
-    unw.tofile(os.path.join(out_dir1, ifgd+'.unw'))
     coh.tofile(os.path.join(out_dir1, ifgd+'.cc'))
 
     ## Output png for corrected unw
     pngfile = os.path.join(out_dir1, ifgd+'.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle*2)
     plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
+
+    ## Output unw last, so that it does not exist if this worker is killed
+    ## (e.g. by the OOM killer) and the ifg is redone on a rerun
+    unw.tofile(os.path.join(out_dir1, ifgd+'.unw'))
 
 
 #%% main

@@ -62,7 +62,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.8"; date=20250722; author="Y. Morishita"
+    ver="1.3.9"; date=20260905; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -83,7 +83,6 @@ def main(argv=None):
 
     cmap_noise = 'viridis'
     cmap_wrap = tools_lib.get_cmap('cm_insar')
-    q = multi.get_context('fork')
 
 
     #%% Read options
@@ -239,9 +238,15 @@ def main(argv=None):
             n_para = n_ifg2
 
         print('  {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        p.map(mask_wrapper, range(n_ifg2))
-        p.close()
+        ### Approx memory use per worker (MB). n_para is capped by
+        ### tools_lib.run_pool with this value and the memory available at
+        ### the time of the parallel processing. ~7 float32 frames: unw,
+        ### which is alive throughout, and the png stage (the complex64
+        ### temporaries of the wrapping, np.angle's output, and
+        ### matplotlib's own copy).
+        _mem_per_worker_mb = 7*length*width*4/2**20
+        tools_lib.run_pool(mask_wrapper, range(n_ifg2), n_para,
+                           mem_per_worker_mb=_mem_per_worker_mb)
 
     print("", flush=True)
 
@@ -285,8 +290,6 @@ def mask_wrapper(ifgix):
     out_dir1 = os.path.join(out_dir, ifgd)
     if not os.path.exists(out_dir1): os.mkdir(out_dir1)
 
-    unw.tofile(os.path.join(out_dir1, ifgd+'.unw'))
-
     if not os.path.exists(os.path.join(out_dir1, ifgd+'.cc')):
         ccfile = os.path.join(in_dir, ifgd, ifgd+'.cc')
         try:
@@ -294,12 +297,15 @@ def mask_wrapper(ifgix):
                        os.path.join(out_dir1, ifgd+'.cc'))
         except:
             shutil.copy(ccfile, out_dir1)
-        
 
     ## Output png for masked unw
     pngfile = os.path.join(out_dir1, ifgd+'.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle*2)
     plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
+
+    ## Output unw last, so that it does not exist if this worker is killed
+    ## (e.g. by the OOM killer) and the ifg is redone on a rerun
+    unw.tofile(os.path.join(out_dir1, ifgd+'.unw'))
 
 
 #%% main
