@@ -56,7 +56,6 @@ gdal.UseExceptions()
 import glob
 import numpy as np
 import subprocess as subp
-import multiprocessing as multi
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -87,10 +86,7 @@ def main(argv=None):
     geocdir = []
     outdir = []
     nlook = 1
-    try:
-        n_para = max(len(os.sched_getaffinity(0))-1, 1)
-    except:
-        n_para = max(multi.cpu_count()-1, 1)
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     cmap_wrap = tools_lib.get_cmap('cm_insar')
     cycle = 3

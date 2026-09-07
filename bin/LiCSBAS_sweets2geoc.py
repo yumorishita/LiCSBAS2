@@ -419,7 +419,11 @@ def main(indir='.', outdir='GEOC', cc_thresh=0.3, n_workers=None,
     grid = get_target_grid(pairs[0][1])
     print(f"Output grid: {grid['width']} x {grid['length']}, EPSG:4326")
 
-    n_cpu = max(1, mp.cpu_count() - 1)
+    try:  # Consider the CPU affinity and the cgroup CPU quota
+        import LiCSBAS_tools_lib as tools_lib
+        n_cpu = max(1, tools_lib.get_n_cpu_avail() - 1)
+    except ImportError:  # LiCSBAS_lib not in PYTHONPATH
+        n_cpu = max(1, mp.cpu_count() - 1)
     if n_workers is not None and n_workers > 0:
         n_workers = min(len(pairs), int(n_workers))
     else:
@@ -488,7 +492,7 @@ if __name__ == '__main__':
     p.add_argument('-i', '--indir', default='.', help='sweets work directory (containing dolphin/) or dolphin directory itself')
     p.add_argument('-o', '--outdir', default='GEOC', help='Target GEOC directory')
     p.add_argument('-t', '--cc_thresh', type=float, default=0.3, help='Coherence threshold for masking unw')
-    p.add_argument('-n', '--n_workers', type=int, default=None, help='Number of parallel workers (default: num CPU cores - 1)')
+    p.add_argument('-n', '--n_workers', type=int, default=None, help='Number of parallel workers (default: number of usable CPUs - 1)')
     p.add_argument('-r', '--resampling', default='nearest',
                    choices=['nearest', 'bilinear', 'cubic', 'lanczos', 'average', 'mode'],
                    help='Resampling method for unw reprojection')

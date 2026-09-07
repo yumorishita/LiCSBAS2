@@ -2,7 +2,7 @@
 """
 Python3 library of time series analysis tools for LiCSBAS.
 
-v1.13.0 20260829 Yu Morishita
+v1.14.0 20260907 Yu Morishita
 """
 import os
 import sys
@@ -650,6 +650,159 @@ def get_patchrow(width, length, n_data, memory_size):
 
 
 #%%
+def _read_cgroup_int(file):
+    """
+    Read a cgroup interface file containing a single integer.
+
+    Returns:
+        int value, or None if not available or unlimited
+    """
+    try:
+        with open(file) as f:
+            value = f.read().strip()
+    except OSError:
+        return None
+
+    try:
+        value = int(value)
+    except ValueError:  ## 'max' in cgroup v2, or unexpected content
+        return None
+
+    if value < 0 or value >= 2**62:
+        return None  ## -1 or a huge value means unlimited in cgroup v1
+
+    return value
+
+
+#%%
+def _get_cgroup_dirs():
+    """
+    Get the directories of the cgroup (v2 and v1, memory and cpu) which this
+    process belongs to, together with their ancestors because a limit can be
+    set at any level of the hierarchy.
+
+    Returns:
+        List of directories (empty if no cgroup, e.g., not on Linux)
+    """
+    base = '/sys/fs/cgroup'
+    dirs = []
+
+    try:
+        with open('/proc/self/cgroup') as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return dirs
+
+    for line in lines:
+        try:
+            _, ctrls, path = line.split(':', 2)
+        except ValueError:
+            continue
+
+        if not ctrls:  ## cgroup v2, e.g., '0::/user.slice/xxx.scope'
+            root = base
+        else:  ## cgroup v1, e.g., '8:memory:/xxx' or '4:cpu,cpuacct:/xxx'
+            names = ctrls.split(',')
+            if not {'memory', 'cpu'} & set(names):
+                continue  ## Controller irrelevant to n_para
+            root = os.path.join(base, ctrls)
+            if not os.path.isdir(root):  ## Mounted with a single name
+                root = os.path.join(base, names[0])
+
+        _dir = os.path.join(root, path.lstrip('/'))
+        if not os.path.isdir(_dir):
+            ### In a container, the path is that of the host and does not
+            ### exist here, where the limits are at the (namespaced) root
+            _dir = root
+        if not os.path.isdir(_dir):
+            continue
+
+        while len(_dir) > len(root):  ## Walk up to the root
+            dirs.append(_dir)
+            _dir = os.path.dirname(_dir)
+        dirs.append(root)
+
+    return list(dict.fromkeys(dirs))  ## Unique, keeping the order
+
+
+#%%
+def get_mem_avail_mb():
+    """
+    Get available memory in MB, taking into account the memory limit of the
+    cgroup which this process belongs to (e.g., container, job of a batch
+    scheduler such as PBS or Slurm, or systemd unit), if any.
+
+    This is necessary because psutil.virtual_memory().available reports the
+    memory of the whole host even when this process is confined to a cgroup
+    with a much smaller limit, which can result in an OOM kill.
+    """
+    import psutil
+
+    mem_avail = psutil.virtual_memory().available/2**20  #MB
+
+    for _dir in _get_cgroup_dirs():
+        ### Page cache in the cgroup is reclaimable, i.e., not really used
+        cache = 0
+        try:
+            with open(os.path.join(_dir, 'memory.stat')) as f:
+                stat = dict(line.split()[:2] for line in f if ' ' in line)
+            cache = int(stat.get('inactive_file',  ## v2
+                                 stat.get('total_inactive_file', 0)))  ## v1
+        except (OSError, ValueError):
+            pass
+
+        for f_limit, f_usage in [('memory.max', 'memory.current'),  ## v2
+                                 ('memory.high', 'memory.current'),  ## v2
+                                 ('memory.limit_in_bytes',  ## v1
+                                  'memory.usage_in_bytes')]:
+            limit = _read_cgroup_int(os.path.join(_dir, f_limit))
+            if limit is None:
+                continue  ## No limit at this level
+            usage = _read_cgroup_int(os.path.join(_dir, f_usage))
+            usage = max((usage if usage else 0)-cache, 0)
+            mem_avail = min(mem_avail, (limit-usage)/2**20)
+
+    return max(mem_avail, 0)
+
+
+#%%
+def get_n_cpu_avail():
+    """
+    Get the number of usable CPUs, taking into account the CPU affinity and
+    the CPU quota of the cgroup which this process belongs to (e.g., docker
+    --cpus or Kubernetes CPU limit), if any.
+
+    This is necessary because a cgroup CPU quota is reflected in neither the
+    CPU affinity nor multiprocessing.cpu_count(), so that many more workers
+    than the allowed CPU time can be forked, wasting memory for nothing.
+    """
+    try:
+        n_cpu = len(os.sched_getaffinity(0))  ## Linux only
+    except AttributeError:
+        n_cpu = os.cpu_count() or 1
+
+    for _dir in _get_cgroup_dirs():
+        ### cgroup v2: 'cpu.max' contains '$quota $period' ('max' if no limit)
+        quota = period = None
+        try:
+            with open(os.path.join(_dir, 'cpu.max')) as f:
+                _quota, _period = f.read().split()[:2]
+            if _quota != 'max':
+                quota, period = int(_quota), int(_period)
+        except (OSError, ValueError):
+            pass
+
+        if quota is None:  ## cgroup v1
+            quota = _read_cgroup_int(os.path.join(_dir, 'cpu.cfs_quota_us'))
+            period = _read_cgroup_int(os.path.join(_dir, 'cpu.cfs_period_us'))
+
+        if quota and period:
+            n_cpu = min(n_cpu, math.ceil(quota/period))
+
+    return max(n_cpu, 1)
+
+
+#%%
 def _limit_worker_threads():
     ### Initializer for run_pool workers: limit BLAS/OpenMP to 1 thread to
     ### avoid oversubscription (n_para workers x N BLAS threads). Must run
@@ -671,8 +824,12 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
 
     - Forks workers so that func can use global variables set in the caller
       (same semantics as the conventional fork Pool in LiCSBAS).
+    - n_para is capped by the CPU quota of the cgroup which this process
+      belongs to (e.g., container or batch job), if any, because it is
+      reflected in neither the CPU affinity nor cpu_count().
     - If mem_per_worker_mb is given, n_para is capped just before execution
-      based on the currently available memory to avoid OOM.
+      based on the currently available memory to avoid OOM. The memory limit
+      of the cgroup, if any, is taken into account as well.
     - If a worker dies unexpectedly (e.g., killed by the OS out-of-memory
       killer), raise RuntimeError with advice instead of hanging forever.
     - If out is given, results are stored one by one as out[i] = result
@@ -692,7 +849,6 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
     from concurrent.futures import ProcessPoolExecutor
     from concurrent.futures.process import BrokenProcessPool
     import multiprocessing as multi
-    import psutil
 
     args = list(args)
     n_task = len(args)
@@ -700,9 +856,16 @@ def run_pool(func, args, n_para, mem_per_worker_mb=None, chunksize=None,
         return [] if (out is None and store is None) else out
     n_para = max(1, min(int(n_para), n_task))
 
+    ### Cap n_para by the CPU quota of the cgroup, if any
+    n_cpu = get_n_cpu_avail()
+    if n_cpu < n_para:
+        print('  Reduce n_para from {} to {} due to the CPU quota of the '
+              'cgroup'.format(n_para, n_cpu), flush=True)
+        n_para = n_cpu
+
     ### Cap n_para by memory available now
     if mem_per_worker_mb:
-        mem_avail = psutil.virtual_memory().available / 2**20  # MB
+        mem_avail = get_mem_avail_mb()  # MB, cgroup limit taken into account
         n_para_mem = max(1, int(mem_avail / 2 / mem_per_worker_mb))
         if n_para_mem < n_para:
             print('  Reduce n_para from {} to {} due to available memory '

@@ -70,7 +70,6 @@ import shutil
 import glob
 import numpy as np
 import datetime as dt
-import multiprocessing as multi
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_loop_lib as loop_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -108,10 +107,7 @@ def main(argv=None):
     rm_noloop_ifg = False
     skip_if_noloop = False
 
-    try:
-        n_para = max(len(os.sched_getaffinity(0))-1, 1)
-    except:
-        n_para = max(multi.cpu_count()-1, 1)
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     cycle = 3 # 2pi*3/cycle
     cmap_noise = 'viridis'

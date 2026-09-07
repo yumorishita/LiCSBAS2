@@ -82,7 +82,6 @@ import time
 import warnings
 
 import h5py as h5
-import multiprocessing as multi
 import numpy as np
 
 import LiCSBAS_io_lib as io_lib
@@ -128,10 +127,7 @@ def main(argv=None):
     hgt_max = 10000 ## meter
     maskflag = True
 
-    try:
-        n_para = max(len(os.sched_getaffinity(0))-1, 1)
-    except:
-        n_para = max(multi.cpu_count()-1, 1)
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     range_str = []
     range_geo_str = []
