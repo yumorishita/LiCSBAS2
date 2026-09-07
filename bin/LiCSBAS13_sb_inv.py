@@ -82,11 +82,9 @@ import os
 import sys
 import re
 import time
-import psutil
 import h5py as h5
 import numpy as np
 import datetime as dt
-import multiprocessing as multi
 import SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
@@ -124,10 +122,7 @@ def main(argv=None):
     inv_alg = 'LS'
     gpu = False
 
-    try:
-        n_para = max(len(os.sched_getaffinity(0))-1, 1)
-    except:
-        n_para = max(multi.cpu_count()-1, 1)
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     memory_size = 8000
     gamma = 0.0001
@@ -352,7 +347,7 @@ def main(argv=None):
 
     #%% Get patch row number
     ### Check RAM
-    mem_avail = (psutil.virtual_memory().available)/2**20 #MB
+    mem_avail = tools_lib.get_mem_avail_mb() #MB, cgroup limit considered
     if memory_size > mem_avail/2:
         print('\nNot enough memory available compared to mem_size ({} MB).'.format(memory_size))
         print('Reduce mem_size automatically to {} MB.'.format(int(mem_avail/2)))

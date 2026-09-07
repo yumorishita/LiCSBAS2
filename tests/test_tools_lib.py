@@ -1,4 +1,5 @@
 """Unit tests for LiCSBAS_tools_lib."""
+import os
 import pathlib
 import subprocess
 import sys
@@ -207,6 +208,119 @@ def test_run_pool_dead_worker_raises_instead_of_hanging():
     res = subprocess.run([sys.executable, '-c', code], timeout=60,
                          capture_output=True, text=True)
     assert 'OK' in res.stdout, res.stderr
+
+
+#%% cgroup awareness
+def _make_cgroup_v2(path, memory_max=None, memory_current=None,
+                    inactive_file=None, cpu_max=None):
+    path.mkdir(parents=True, exist_ok=True)
+    (path / 'memory.max').write_text('{}\n'.format(
+        'max' if memory_max is None else memory_max))
+    if memory_current is not None:
+        (path / 'memory.current').write_text('{}\n'.format(memory_current))
+    if inactive_file is not None:
+        (path / 'memory.stat').write_text(
+            'anon 12345\ninactive_file {}\n'.format(inactive_file))
+    (path / 'cpu.max').write_text('{}\n'.format(
+        'max 100000' if cpu_max is None else cpu_max))
+    return path
+
+
+def test_read_cgroup_int(tmp_path):
+    (tmp_path / 'unlimited').write_text('max\n')
+    (tmp_path / 'unlimited_v1').write_text('-1\n')
+    (tmp_path / 'huge_v1').write_text('9223372036854771712\n')
+    (tmp_path / 'limited').write_text('1234\n')
+    assert tools_lib._read_cgroup_int(tmp_path / 'unlimited') is None
+    assert tools_lib._read_cgroup_int(tmp_path / 'unlimited_v1') is None
+    assert tools_lib._read_cgroup_int(tmp_path / 'huge_v1') is None
+    assert tools_lib._read_cgroup_int(tmp_path / 'nonexistent') is None
+    assert tools_lib._read_cgroup_int(tmp_path / 'limited') == 1234
+
+
+def test_get_cgroup_dirs_no_crash():
+    # Whatever (or no) cgroup this test runs in, it must return a list of
+    # existing directories without raising
+    dirs = tools_lib._get_cgroup_dirs()
+    assert isinstance(dirs, list)
+    assert all(os.path.isdir(d) for d in dirs)
+    assert len(dirs) == len(set(dirs))
+
+
+def test_get_mem_avail_mb_no_cgroup(monkeypatch):
+    import psutil
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [])
+    mem_avail = tools_lib.get_mem_avail_mb()
+    assert mem_avail == pytest.approx(
+        psutil.virtual_memory().available / 2**20, rel=0.1)
+
+
+def test_get_mem_avail_mb_cgroup_v2(monkeypatch, tmp_path):
+    # 100 MB limit, 40 MB used of which 10 MB is reclaimable page cache
+    cg = _make_cgroup_v2(tmp_path / 'cg', memory_max=100 * 2**20,
+                         memory_current=40 * 2**20,
+                         inactive_file=10 * 2**20)
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [str(cg)])
+    assert tools_lib.get_mem_avail_mb() == pytest.approx(70, abs=1)
+
+
+def test_get_mem_avail_mb_cgroup_ancestor_limit(monkeypatch, tmp_path):
+    # The tightest limit in the hierarchy wins, even if it is an ancestor
+    parent = _make_cgroup_v2(tmp_path / 'parent', memory_max=50 * 2**20,
+                             memory_current=10 * 2**20)
+    child = _make_cgroup_v2(parent / 'child', memory_current=10 * 2**20)
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs',
+                        lambda: [str(child), str(parent)])
+    assert tools_lib.get_mem_avail_mb() == pytest.approx(40, abs=1)
+
+
+def test_get_mem_avail_mb_cgroup_v1(monkeypatch, tmp_path):
+    cg = tmp_path / 'cg'
+    cg.mkdir()
+    (cg / 'memory.limit_in_bytes').write_text('{}\n'.format(200 * 2**20))
+    (cg / 'memory.usage_in_bytes').write_text('{}\n'.format(80 * 2**20))
+    (cg / 'memory.stat').write_text(
+        'cache 0\ntotal_inactive_file {}\n'.format(30 * 2**20))
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [str(cg)])
+    assert tools_lib.get_mem_avail_mb() == pytest.approx(150, abs=1)
+
+
+@pytest.mark.skipif(not hasattr(os, 'sched_getaffinity'),
+                    reason='needs sched_getaffinity')
+def test_get_n_cpu_avail_no_quota(monkeypatch):
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [])
+    assert tools_lib.get_n_cpu_avail() == len(os.sched_getaffinity(0))
+
+
+def test_get_n_cpu_avail_cgroup_v2(monkeypatch, tmp_path):
+    cg = _make_cgroup_v2(tmp_path / 'cg', cpu_max='150000 100000')
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [str(cg)])
+    assert tools_lib.get_n_cpu_avail() == 2  # 1.5 cores, rounded up
+
+
+def test_get_n_cpu_avail_cgroup_v1(monkeypatch, tmp_path):
+    cg = tmp_path / 'cg'
+    cg.mkdir()
+    (cg / 'cpu.cfs_quota_us').write_text('200000\n')
+    (cg / 'cpu.cfs_period_us').write_text('100000\n')
+    monkeypatch.setattr(tools_lib, '_get_cgroup_dirs', lambda: [str(cg)])
+    assert tools_lib.get_n_cpu_avail() == 2
+
+
+def test_run_pool_cpu_quota_cap(monkeypatch, capsys):
+    monkeypatch.setattr(tools_lib, 'get_n_cpu_avail', lambda: 1)
+    assert tools_lib.run_pool(_square, range(10), 4) \
+        == [i * i for i in range(10)]
+    assert 'CPU quota' in capsys.readouterr().out
+
+
+def test_run_pool_mem_cap_uses_cgroup(monkeypatch, capsys):
+    # 100 MB available in the cgroup allows only 100/2/40 = 1 worker,
+    # regardless of the memory of the host
+    monkeypatch.setattr(tools_lib, 'get_mem_avail_mb', lambda: 100)
+    result = tools_lib.run_pool(_square, range(10), 4, mem_per_worker_mb=40)
+    assert result == [i * i for i in range(10)]
+    assert 'Reduce n_para from 4 to 1' in capsys.readouterr().out
 
 
 #%% calculate_common_geometry

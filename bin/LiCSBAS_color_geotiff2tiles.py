@@ -42,6 +42,7 @@ gdal.UseExceptions()
 import numpy as np
 import subprocess as subp
 import multiprocessing as multi
+import LiCSBAS_tools_lib as tools_lib
 
 class Usage(Exception):
     """Usage context manager"""
@@ -71,10 +72,7 @@ def main(argv=None):
     zmin = 5
     zmax = []
     tms_flag = True
-    try:
-        n_para = max(len(os.sched_getaffinity(0))-1, 1)
-    except:
-        n_para = max(multi.cpu_count()-1, 1)
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     q = multi.get_context('fork')
 

@@ -49,7 +49,6 @@ LiCSBAS03op_GACOS.py -i in_dir -o out_dir [-g gacosdir] [--fillhole] [--n_para i
 #%% Import
 import getopt
 import glob
-import multiprocessing as multi
 import os
 import shutil
 import sys
@@ -152,10 +151,7 @@ def main(argv=None):
     gacosdir = 'GACOS'
     resampleAlg = 'cubicspline'# None # 'cubic'
     fillholeflag = False
-    try:
-        n_para = len(os.sched_getaffinity(0)) - 1
-    except:
-        n_para = multi.cpu_count() - 1
+    n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     cmap_wrap = tools_lib.get_cmap('cm_insar')
 

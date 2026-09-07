@@ -269,7 +269,11 @@ def main(indir='.', outdir='GEOC', crop_geo=None, cc_thresh=0.5,
     print(f'Number of product subdirectories: {len(prod_dirs)}')
 
     # Parallel processing of products for IFG (unw/cc) handling
-    n_cpu = max(1, mp.cpu_count() - 1)
+    try:  # Consider the CPU affinity and the cgroup CPU quota
+        import LiCSBAS_tools_lib as tools_lib
+        n_cpu = max(1, tools_lib.get_n_cpu_avail() - 1)
+    except ImportError:  # LiCSBAS_lib not in PYTHONPATH
+        n_cpu = max(1, mp.cpu_count() - 1)
 
     # allow user override via CLI
     if n_workers is not None and n_workers > 0:
@@ -481,7 +485,7 @@ if __name__ == '__main__':
     p.add_argument('-t', '--cc_thresh', type=float, default=0.5,
                    help='Coherence threshold (0-1). Pixels with cc < threshold will be masked in unw (default: 0.5)')
     p.add_argument('-n', '--n_workers', type=int, default=None,
-                   help='Number of parallel workers to use for IFG processing (default: cpu_count()-1)')
+                   help='Number of parallel workers to use for IFG processing (default: number of usable CPUs - 1)')
     p.add_argument('-r', '--resampling', type=str, default='nearest',
                    choices=['nearest', 'bilinear', 'cubic', 'lanczos', 'average', 'mode'],
                    help='Resampling algorithm for reprojection/cropping (default: nearest)')
