@@ -74,7 +74,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.8"; date=20260905; author="Y. Morishita"
+    ver="1.7.9"; date=20260908; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -434,7 +434,9 @@ def convert_wrapper(i):
         cc = tools_lib.multilook(cc, nlook, nlook, n_valid_thre)
 
     ### Output cc
-    cc = cc.astype(np.uint8) ##nan->0, max255, auto-floored
+    ## Explicit nan->0 and clip to 0-255 to avoid undefined cast
+    ## (RuntimeWarning: invalid value encountered in cast)
+    cc = np.clip(np.nan_to_num(cc), 0, 255).astype(np.uint8) ##auto-floored
     cc.tofile(ccfile)
 
     ### Make png
