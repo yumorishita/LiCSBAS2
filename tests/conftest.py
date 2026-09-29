@@ -106,3 +106,58 @@ def ts16(ts15, geocml, run_script):
     run_script('LiCSBAS16_filt_ts.py', '-t', 'TS_GEOCml1', '--n_para', '1',
                cwd=geocml.workdir)
     return ts15
+
+
+# --- Defective dataset: exercises the rejection paths of steps 11-13 ---
+
+@pytest.fixture(scope='session')
+def geocml_defect(tmp_path_factory):
+    """Build the synthetic GEOCml1 dataset with defective ifgs.
+
+    Separate workdir from the geocml fixture so the two chains do not
+    interfere. See synth.build_geocml_defect for what each defect is.
+    """
+    workdir = tmp_path_factory.mktemp('licsbas_defect')
+    return synth.build_geocml_defect(workdir)
+
+
+@pytest.fixture(scope='session')
+def ts11d(geocml_defect, run_script):
+    run_script('LiCSBAS11_check_unw.py', '-d', 'GEOCml1',
+               cwd=geocml_defect.workdir)
+    return geocml_defect.workdir / 'TS_GEOCml1'
+
+
+@pytest.fixture(scope='session')
+def ts12d(ts11d, geocml_defect, run_script):
+    run_script('LiCSBAS12_loop_closure.py', '-d', 'GEOCml1', '--n_para', '1',
+               cwd=geocml_defect.workdir)
+    return ts11d
+
+
+@pytest.fixture(scope='session')
+def ts13d(ts12d, geocml_defect, run_script):
+    run_script('LiCSBAS13_sb_inv.py', '-d', 'GEOCml1', '--n_para', '1',
+               cwd=geocml_defect.workdir)
+    return ts12d
+
+
+@pytest.fixture(scope='session')
+def ts14d(ts13d, geocml_defect, run_script):
+    run_script('LiCSBAS14_vel_std.py', '-t', 'TS_GEOCml1',
+               cwd=geocml_defect.workdir)
+    return ts13d
+
+
+@pytest.fixture(scope='session')
+def ts15d(ts14d, geocml_defect, run_script):
+    run_script('LiCSBAS15_mask_ts.py', '-t', 'TS_GEOCml1',
+               cwd=geocml_defect.workdir)
+    return ts14d
+
+
+@pytest.fixture(scope='session')
+def ts16d(ts15d, geocml_defect, run_script):
+    run_script('LiCSBAS16_filt_ts.py', '-t', 'TS_GEOCml1', '--n_para', '1',
+               cwd=geocml_defect.workdir)
+    return ts15d
