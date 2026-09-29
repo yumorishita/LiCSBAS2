@@ -87,11 +87,6 @@ def test_step12_n_loop_err_zero_after_removal(ts12d, geocml_defect):
     np.testing.assert_array_equal(n_loop_err, 0)
 
 
-@pytest.mark.xfail(strict=True, reason='calc_n_unw in LiCSBAS12_loop_closure '
-                                       'ignores its _ifgdates argument and '
-                                       'loops over the global ifgdates, so '
-                                       'results/n_unw counts the ifgs that '
-                                       'step 12 discarded')
 def test_step12_n_unw_counts_good_ifgs_only(ts12d, geocml_defect):
     n_unw = io_lib.read_img(str(ts12d / 'results' / 'n_unw'),
                             geocml_defect.length, geocml_defect.width)
