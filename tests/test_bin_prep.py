@@ -9,6 +9,7 @@ outputs are checked value by value against a model of the input
 import filecmp
 import os
 import re
+import shutil
 
 import numpy as np
 import pytest
@@ -20,6 +21,11 @@ pytestmark = pytest.mark.smoke
 
 L, W = synth.LENGTH, synth.WIDTH                 # GEOCml2 and steps 04/05
 GL, GW = synth.GEOC_LENGTH, synth.GEOC_WIDTH     # GEOCml1 from step 02
+
+# Geographic coordinates: pytest.approx's default rel=1e-6 would allow
+# ~1.3e-4 deg on a longitude of 132, more than half of the half-pixel
+# shifts these tests must detect.
+DEG = dict(abs=1e-9)
 
 
 def read_unw(d, ifgd, length, width):
@@ -53,8 +59,9 @@ def test_step02_nlook1_unw_cc(geocml1_02):
 
 
 def test_step02_nlook2_multilook(geocml2_02):
-    """Multilooking must average valid pixels only, give nan where fewer
-    than half of a block is valid, and floor the averaged cc."""
+    """Multilooking must average valid pixels only (for cc too, where 0 is
+    nodata), give nan where fewer than half of a block is valid, and floor
+    the averaged cc."""
     for ifgd in synth.IFGDATES:
         np.testing.assert_allclose(read_unw(geocml2_02, ifgd, L, W),
                                    synth.geoc_unw_ml_expected(ifgd),
@@ -87,13 +94,15 @@ def test_step02_par_files_nlook1(geocml1_02):
     dempar = geocml1_02 / 'EQA.dem_par'
     assert int(par(dempar, 'width')) == GW
     assert int(par(dempar, 'nlines')) == GL
-    assert float(par(dempar, 'post_lat')) == pytest.approx(synth.GEOC_DLAT)
-    assert float(par(dempar, 'post_lon')) == pytest.approx(synth.GEOC_DLON)
+    assert float(par(dempar, 'post_lat')) == pytest.approx(synth.GEOC_DLAT,
+                                                           **DEG)
+    assert float(par(dempar, 'post_lon')) == pytest.approx(synth.GEOC_DLON,
+                                                           **DEG)
     # EQA.dem_par is in grid registration: center of the first pixel
     assert float(par(dempar, 'corner_lat')) == pytest.approx(
-        synth.GEOC_LAT_N + synth.GEOC_DLAT / 2)
+        synth.GEOC_LAT_N + synth.GEOC_DLAT / 2, **DEG)
     assert float(par(dempar, 'corner_lon')) == pytest.approx(
-        synth.GEOC_LON_W + synth.GEOC_DLON / 2)
+        synth.GEOC_LON_W + synth.GEOC_DLON / 2, **DEG)
 
 
 def test_step02_par_files_nlook2_size(geocml2_02):
@@ -103,26 +112,25 @@ def test_step02_par_files_nlook2_size(geocml2_02):
     assert int(par(dempar, 'width')) == W
     assert int(par(dempar, 'nlines')) == L
     assert float(par(dempar, 'post_lat')) == pytest.approx(
-        synth.GEOC_DLAT * synth.NLOOK)
+        synth.GEOC_DLAT * synth.NLOOK, **DEG)
     assert float(par(dempar, 'post_lon')) == pytest.approx(
-        synth.GEOC_DLON * synth.NLOOK)
+        synth.GEOC_DLON * synth.NLOOK, **DEG)
 
 
-@pytest.mark.xfail(strict=True, reason='#174: step 02 shifts the pixel-'
-                                       'registration corner by half an '
-                                       'ORIGINAL pixel even when multilooking, '
-                                       'instead of half a multilooked pixel, '
-                                       'so the grid is off by (nlook-1)/2 '
-                                       'original pixels')
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason='#174: step 02 shifts the pixel-registration corner '
+                          'by half an ORIGINAL pixel even when multilooking, '
+                          'instead of half a multilooked pixel, so the grid '
+                          'is off by (nlook-1)/2 original pixels')
 def test_step02_corner_nlook2(geocml2_02):
     """The first multilooked pixel averages the first NLOOK x NLOOK
     original pixels, so its center is NLOOK/2 original pixels inside the
     frame edge."""
     dempar = geocml2_02 / 'EQA.dem_par'
     assert float(par(dempar, 'corner_lat')) == pytest.approx(
-        synth.GEOC_LAT_N + synth.GEOC_DLAT * synth.NLOOK / 2)
+        synth.GEOC_LAT_N + synth.GEOC_DLAT * synth.NLOOK / 2, **DEG)
     assert float(par(dempar, 'corner_lon')) == pytest.approx(
-        synth.GEOC_LON_W + synth.GEOC_DLON * synth.NLOOK / 2)
+        synth.GEOC_LON_W + synth.GEOC_DLON * synth.NLOOK / 2, **DEG)
 
 
 @pytest.mark.parametrize('fixture', ['geocml1_02', 'geocml2_02'])
@@ -141,46 +149,61 @@ def test_step02_baselines_copied(geoc, geocml1_02):
                        str(geocml1_02 / 'baselines'), shallow=False)
 
 
-def test_step02_dummy_baselines(geocml1_02_nometa):
-    """Without baselines, a dummy one covering all epochs is made."""
+def test_step02_defaults_without_metadata(geocml1_02_nometa):
+    """Without metadata.txt, --freq nor baselines: Sentinel-1 frequency,
+    no center_time, and a dummy baselines covering all epochs."""
+    mlipar = geocml1_02_nometa / 'slc.mli.par'
+    assert float(par(mlipar, 'radar_frequency')) == pytest.approx(5.405e9)
+    assert 'center_time' not in mlipar.read_text()
+
     bperp = io_lib.read_bperp_file(str(geocml1_02_nometa / 'baselines'),
                                    synth.IMDATES)
+    assert bperp is not False, 'baselines does not cover all epochs'
     assert len(bperp) == len(synth.IMDATES)
+    # make_dummy_bperp draws values within +/-1 m; synth.BPERP is 12-80 m
+    assert np.all(np.abs(bperp) <= 1)
 
 
-@pytest.mark.xfail(strict=True, reason='#173: the default radar_freq '
-                                       '(5.405e9) is assigned after the '
-                                       'options are parsed, so --freq is '
-                                       'always overwritten')
-def test_step02_freq_option(geocml1_02_nometa):
-    radar_freq = float(par(geocml1_02_nometa / 'slc.mli.par',
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason='#173: the default radar_freq (5.405e9) is assigned '
+                          'after the options are parsed, so --freq is always '
+                          'overwritten')
+def test_step02_freq_option(geocml1_02_freq):
+    radar_freq = float(par(geocml1_02_freq / 'slc.mli.par',
                            'radar_frequency'))
     assert radar_freq == pytest.approx(1.27e9)
 
 
-def test_step02_rerun_skips_existing(geoc, geocml1_02, run_script):
+def test_step02_rerun_skips_existing(geoc, geocml1_02, run_script, tmp_path):
     """Existing outputs are not recreated; the ifg without cc is retried
-    and listed again."""
-    unwfiles = [geocml1_02 / d / (d + '.unw') for d in synth.IFGDATES]
-    mtimes = [os.stat(f).st_mtime_ns for f in unwfiles]
-    parfiles = [geocml1_02 / 'slc.mli.par', geocml1_02 / 'EQA.dem_par']
+    and listed again.
+
+    Runs on a copy of GEOCml1 so that the outputs the other tests check
+    stay those of the first run whatever the test order.
+    """
+    outdir = tmp_path / 'GEOCml1'
+    shutil.copytree(str(geocml1_02), str(outdir))  # copy2 keeps mtimes
+    unwfiles = [outdir / d / (d + '.unw') for d in synth.IFGDATES]
+    before = [(os.stat(f).st_mtime_ns, f.read_bytes()) for f in unwfiles]
+    parfiles = [outdir / 'slc.mli.par', outdir / 'EQA.dem_par']
     pars = [f.read_text() for f in parfiles]
 
-    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
-                     '--n_para', '1', cwd=geoc.workdir)
+    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-o', str(outdir),
+                     '-n', '1', '--n_para', '1', cwd=geoc.workdir)
 
     assert re.search(r'\b{}/\s*{} unw and cc already exist'.format(
         len(synth.IFGDATES), len(geoc.ifgdates)), res.stdout)
-    assert [os.stat(f).st_mtime_ns for f in unwfiles] == mtimes
+    assert [(os.stat(f).st_mtime_ns, f.read_bytes())
+            for f in unwfiles] == before
     assert [f.read_text() for f in parfiles] == pars
-    assert (geocml1_02 / 'no_unw_list.txt').read_text().split() == \
+    assert (outdir / 'no_unw_list.txt').read_text().split() == \
         [synth.GEOC_NOCC_IFG]
 
 
 #%% Step 04: mask
 def prep_unw(geocml_prep, ifgd):
     """Input unw of steps 04/05 with nodata as nan, as they must read it."""
-    unw = read_unw(geocml_prep.geocdir, ifgd, L, W)
+    unw = geocml_prep.unw_in[ifgd].copy()
     unw[unw == 0] = np.nan
     return unw
 
@@ -206,16 +229,21 @@ def test_step04_mask_by_coherence_and_range(geocml_prep, mask04):
 
 def test_step04_coh_avg(mask04):
     coh_avg = io_lib.read_img(str(mask04 / 'coh_avg'), L, W)
-    exp = np.full((L, W), 180 / 255, dtype=np.float32)
+    exp = np.full((L, W), synth.GEOCML_CC / 255, dtype=np.float32)
     exp[:, synth.PREP_LOWCC_COL] = synth.PREP_LOWCC / 255
     np.testing.assert_allclose(coh_avg, exp, atol=1e-6)
 
 
 def test_step04_cc_and_other_files(geocml_prep, mask04):
-    """cc is linked (or copied) unchanged, and other files are copied."""
+    """cc is linked to the input (or copied) unchanged, and other files are
+    copied."""
     for ifgd in synth.IFGDATES:
-        assert filecmp.cmp(str(geocml_prep.geocdir / ifgd / (ifgd + '.cc')),
-                           str(mask04 / ifgd / (ifgd + '.cc')), shallow=False)
+        cc_in = geocml_prep.geocdir / ifgd / (ifgd + '.cc')
+        cc_out = mask04 / ifgd / (ifgd + '.cc')
+        if cc_out.is_symlink():
+            assert os.path.realpath(str(cc_out)) == os.path.realpath(str(cc_in))
+        np.testing.assert_array_equal(read_cc(mask04, ifgd, L, W),
+                                      geocml_prep.cc_in[ifgd])
     for name in ('slc.mli.par', 'EQA.dem_par', 'baselines', 'hgt', 'slc.mli'):
         assert filecmp.cmp(str(geocml_prep.geocdir / name),
                            str(mask04 / name), shallow=False), name
@@ -238,55 +266,53 @@ def test_step04_mask_by_range_file(geocml_prep, mask04_file):
 
 
 #%% Step 05: clip
-X1, X2, Y1, Y2 = 0, 7, 1, 10   # clip05: -r 0:7/1:10
+X1, X2, Y1, Y2 = 1, 7, 1, 10   # clip05: -r 1:7/1:10
+LC, WC = Y2 - Y1, X2 - X1
 
 
 def test_step05_clip_unw_cc(geocml_prep, clip05):
-    lc, wc = Y2 - Y1, X2 - X1
     for ifgd in synth.IFGDATES:
         unw_exp = prep_unw(geocml_prep, ifgd)[Y1:Y2, X1:X2]
-        np.testing.assert_array_equal(read_unw(clip05, ifgd, lc, wc), unw_exp)
+        np.testing.assert_array_equal(read_unw(clip05, ifgd, LC, WC), unw_exp)
 
-        cc_exp = read_cc(geocml_prep.geocdir, ifgd, L, W)[Y1:Y2, X1:X2]
-        np.testing.assert_array_equal(read_cc(clip05, ifgd, lc, wc), cc_exp)
+        cc_exp = geocml_prep.cc_in[ifgd][Y1:Y2, X1:X2]
+        np.testing.assert_array_equal(read_cc(clip05, ifgd, LC, WC), cc_exp)
         assert (clip05 / ifgd / (ifgd + '.unw.png')).stat().st_size > 0
 
     # The nodata pixel is inside the clipped area and must be nan there
     y, x = synth.PREP_NODATA_YX
-    assert np.isnan(read_unw(clip05, synth.IFGDATES[0], lc, wc)[y - Y1, x - X1])
+    assert np.isnan(read_unw(clip05, synth.IFGDATES[0], LC, WC)[y - Y1, x - X1])
 
 
 def test_step05_clip_float_files(clip05):
-    lc, wc = Y2 - Y1, X2 - X1
-    hgt = io_lib.read_img(str(clip05 / 'hgt'), lc, wc)
+    hgt = io_lib.read_img(str(clip05 / 'hgt'), LC, WC)
     np.testing.assert_array_equal(hgt, synth.prep_hgt()[Y1:Y2, X1:X2])
-    mli = io_lib.read_img(str(clip05 / 'slc.mli'), lc, wc)
-    np.testing.assert_array_equal(mli, synth.prep_hgt()[Y1:Y2, X1:X2] + 1000)
+    mli = io_lib.read_img(str(clip05 / 'slc.mli'), LC, WC)
+    np.testing.assert_array_equal(mli, synth.prep_mli()[Y1:Y2, X1:X2])
     # pngs are recreated from the clipped data, not copied (inputs are empty)
     assert (clip05 / 'hgt.png').stat().st_size > 0
     assert (clip05 / 'slc.mli.png').stat().st_size > 0
 
 
 def test_step05_par_files(geocml_prep, clip05):
-    lc, wc = Y2 - Y1, X2 - X1
     mlipar_in = geocml_prep.geocdir / 'slc.mli.par'
     mlipar = clip05 / 'slc.mli.par'
-    assert int(par(mlipar, 'range_samples')) == wc
-    assert int(par(mlipar, 'azimuth_lines')) == lc
+    assert int(par(mlipar, 'range_samples')) == WC
+    assert int(par(mlipar, 'azimuth_lines')) == LC
     assert par(mlipar, 'radar_frequency') == par(mlipar_in, 'radar_frequency')
 
     dempar_in = geocml_prep.geocdir / 'EQA.dem_par'
     dempar = clip05 / 'EQA.dem_par'
-    assert int(par(dempar, 'width')) == wc
-    assert int(par(dempar, 'nlines')) == lc
+    assert int(par(dempar, 'width')) == WC
+    assert int(par(dempar, 'nlines')) == LC
     post_lat = float(par(dempar_in, 'post_lat'))
     post_lon = float(par(dempar_in, 'post_lon'))
     assert float(par(dempar, 'post_lat')) == post_lat
     assert float(par(dempar, 'post_lon')) == post_lon
     assert float(par(dempar, 'corner_lat')) == pytest.approx(
-        float(par(dempar_in, 'corner_lat')) + post_lat * Y1)
+        float(par(dempar_in, 'corner_lat')) + post_lat * Y1, **DEG)
     assert float(par(dempar, 'corner_lon')) == pytest.approx(
-        float(par(dempar_in, 'corner_lon')) + post_lon * X1)
+        float(par(dempar_in, 'corner_lon')) + post_lon * X1, **DEG)
 
     assert (clip05 / 'cliparea.txt').read_text() == \
         '{}:{}/{}:{}'.format(X1, X2, Y1, Y2)
@@ -295,13 +321,24 @@ def test_step05_par_files(geocml_prep, clip05):
 
 
 def test_step05_geo_range_equals_index_range(clip05, clip05_geo):
-    """-g with the lon/lat of the -r area must give identical output."""
-    cmp = filecmp.dircmp(str(clip05), str(clip05_geo))
-    pngs = lambda files: [f for f in files if not f.endswith('.png')]
-    assert not cmp.left_only and not cmp.right_only
-    assert pngs(cmp.diff_files) == []
+    """-g with the lon/lat of the -r area must give identical output
+    (pngs aside, whose bytes may differ between two renderings)."""
+    def files(d):
+        return sorted(os.path.relpath(os.path.join(root, f), str(d))
+                      for root, _, fs in os.walk(str(d)) for f in fs
+                      if not f.endswith('.png'))
+
+    assert files(clip05) == files(clip05_geo)
+    for f in files(clip05):
+        assert filecmp.cmp(str(clip05 / f), str(clip05_geo / f),
+                           shallow=False), f
+
+
+#%% Steps 04 and 05 must not touch their input
+def test_steps04_05_leave_input_untouched(geocml_prep, mask04, mask04_file,
+                                          clip05, clip05_geo):
     for ifgd in synth.IFGDATES:
-        for ext in ('.unw', '.cc'):
-            f = os.path.join(ifgd, ifgd + ext)
-            assert filecmp.cmp(str(clip05 / f), str(clip05_geo / f),
-                               shallow=False), f
+        np.testing.assert_array_equal(read_unw(geocml_prep.geocdir, ifgd, L, W),
+                                      geocml_prep.unw_in[ifgd])
+        np.testing.assert_array_equal(read_cc(geocml_prep.geocdir, ifgd, L, W),
+                                      geocml_prep.cc_in[ifgd])

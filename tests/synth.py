@@ -24,6 +24,8 @@ IFGDATES = sorted('{}_{}'.format(IMDATES[i], IMDATES[j]) for i, j in IFG_PAIRS)
 # bperp (m) of each epoch relative to the first
 BPERP = [0.0, 30.0, -55.0, 12.0, 80.0]
 
+GEOCML_CC = 180  # uint8 coherence of every pixel of the clean dataset
+
 
 def vel_truth_mm():
     """True velocity field (mm/yr), strictly positive everywhere."""
@@ -97,7 +99,7 @@ def build_geocml(workdir):
     # sigma = 0.0003 rad (~0.001 mm) keeps the truth check meaningful.
     rng = np.random.default_rng(42)
 
-    cc = np.full((LENGTH, WIDTH), 180, dtype=np.uint8)
+    cc = np.full((LENGTH, WIDTH), GEOCML_CC, dtype=np.uint8)
     for ifgd in IFGDATES:
         d = geocdir / ifgd
         d.mkdir()
@@ -225,10 +227,13 @@ def build_geocml_defect(workdir):
 # over a partial one. That separates a correct nanmean from nodata being
 # treated as 0 or a block being taken by its first pixel.
 #
-# Defects, all in GEOC_DEFECT_IFG:
+# Defects, all in GEOC_DEFECT_IFG (cc is nodata, 0, where unw is, as in
+# real data):
 #   - block (0, 0): 1 of 4 pixels valid         -> nan (< n_valid_thre 0.5)
+#                                                  cc 0
 #   - block (0, 1): the 2 diagonal +CHECKER pixels valid -> value + CHECKER
-#   - block (0, 2): no pixel valid              -> nan
+#                                                  cc GEOC_CC (not halved)
+#   - block (0, 2): no pixel valid              -> nan, cc 0
 #   - cc block (1, 0): 100, 101, 102, 103       -> 101 (mean 101.5, floored)
 # and
 #   - GEOC_FLOATCC_IFG has a float32 cc of 0-1 instead of uint8
@@ -296,6 +301,7 @@ def geoc_cc(ifgd):
         return np.full((GEOC_LENGTH, GEOC_WIDTH), GEOC_FLOATCC, np.float32)
     cc = np.full((GEOC_LENGTH, GEOC_WIDTH), GEOC_CC, np.uint8)
     if ifgd == GEOC_DEFECT_IFG:
+        cc[geoc_unw(ifgd) == 0] = 0
         cc[2:4, 0:2] = [[100, 101], [102, 103]]
     return cc
 
@@ -306,6 +312,7 @@ def geoc_cc_ml_expected(ifgd):
         return np.full((LENGTH, WIDTH), int(GEOC_FLOATCC * 255), np.uint8)
     cc = np.full((LENGTH, WIDTH), GEOC_CC, np.uint8)
     if ifgd == GEOC_DEFECT_IFG:
+        cc[0, 0] = cc[0, 2] = 0  # below n_valid_thre -> nan -> 0
         cc[1, 0] = 101
     return cc
 
@@ -343,8 +350,7 @@ def build_geoc(workdir, metadata=True, baselines=True):
         write_baselines(geocdir / 'baselines')
 
     return SimpleNamespace(workdir=workdir, geocdir=geocdir,
-                           ifgdates=IFGDATES + [GEOC_NOCC_IFG],
-                           ifgdates_ok=IFGDATES, nocc_ifg=GEOC_NOCC_IFG)
+                           ifgdates=IFGDATES + [GEOC_NOCC_IFG])
 
 
 #%% GEOCml dataset for steps 04 and 05
@@ -356,7 +362,7 @@ def build_geoc(workdir, metadata=True, baselines=True):
 
 PREP_LOWCC_COL = WIDTH - 1
 PREP_LOWCC = 30          # 30/255 = 0.12
-PREP_NODATA_YX = (LENGTH - 1, 0)
+PREP_NODATA_YX = (LENGTH - 1, 1)
 
 
 def prep_hgt():
@@ -364,24 +370,37 @@ def prep_hgt():
     return np.arange(LENGTH * WIDTH, dtype=np.float32).reshape(LENGTH, WIDTH)
 
 
+def prep_mli():
+    """slc.mli, distinct in every pixel and different from hgt."""
+    return prep_hgt() + 1000
+
+
 def build_geocml_prep(workdir):
-    """build_geocml plus the features steps 04 and 05 act on."""
+    """build_geocml plus the features steps 04 and 05 act on.
+
+    The returned model also holds the unw and cc written (unw_in, cc_in),
+    so that tests take their expectations from memory and would notice a
+    step modifying its input in place.
+    """
     truth = build_geocml(workdir)
     geocdir = truth.geocdir
+    truth.unw_in, truth.cc_in = {}, {}
 
     for ifgd in IFGDATES:
         unwfile = geocdir / ifgd / (ifgd + '.unw')
         unw = np.fromfile(str(unwfile), dtype=np.float32).reshape(LENGTH, WIDTH)
         unw[PREP_NODATA_YX] = 0
         write_img(unwfile, unw)
+        truth.unw_in[ifgd] = unw
 
         ccfile = geocdir / ifgd / (ifgd + '.cc')
         cc = np.fromfile(str(ccfile), dtype=np.uint8).reshape(LENGTH, WIDTH)
         cc[:, PREP_LOWCC_COL] = PREP_LOWCC
         write_img(ccfile, cc)
+        truth.cc_in[ifgd] = cc
 
     write_img(geocdir / 'hgt', prep_hgt())
-    write_img(geocdir / 'slc.mli', prep_hgt() + 1000)
+    write_img(geocdir / 'slc.mli', prep_mli())
     (geocdir / 'hgt.png').touch()
     (geocdir / 'slc.mli.png').touch()
 

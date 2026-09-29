@@ -186,13 +186,27 @@ def geocml2_02(geoc, run_script):
 
 
 @pytest.fixture(scope='session')
-def geocml1_02_nometa(tmp_path_factory, run_script):
-    """Step 02 on GEOC without metadata.txt nor baselines, with --freq."""
-    geoc = synth.build_geoc(tmp_path_factory.mktemp('licsbas_geoc_nometa'),
+def geoc_nometa(tmp_path_factory):
+    """GEOC without metadata.txt nor baselines."""
+    return synth.build_geoc(tmp_path_factory.mktemp('licsbas_geoc_nometa'),
                             metadata=False, baselines=False)
+
+
+@pytest.fixture(scope='session')
+def geocml1_02_nometa(geoc_nometa, run_script):
+    """Step 02 without metadata.txt and without --freq: all defaults."""
     run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
-               '--freq', '1.27e9', '--n_para', '1', cwd=geoc.workdir)
-    return geoc.workdir / 'GEOCml1'
+               '--n_para', '1', cwd=geoc_nometa.workdir)
+    return geoc_nometa.workdir / 'GEOCml1'
+
+
+@pytest.fixture(scope='session')
+def geocml1_02_freq(geoc_nometa, run_script):
+    """Step 02 without metadata.txt, with --freq."""
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+               '-o', 'GEOCml1freq', '--freq', '1.27e9', '--n_para', '1',
+               cwd=geoc_nometa.workdir)
+    return geoc_nometa.workdir / 'GEOCml1freq'
 
 
 @pytest.fixture(scope='session')
@@ -222,16 +236,16 @@ def mask04_file(geocml_prep, run_script):
 @pytest.fixture(scope='session')
 def clip05(geocml_prep, run_script):
     run_script('LiCSBAS05op_clip_unw.py', '-i', 'GEOCml1', '-o', 'GEOCml1clip',
-               '-r', '0:7/1:10', '--n_para', '1', cwd=geocml_prep.workdir)
+               '-r', '1:7/1:10', '--n_para', '1', cwd=geocml_prep.workdir)
     return geocml_prep.workdir / 'GEOCml1clip'
 
 
 @pytest.fixture(scope='session')
 def clip05_geo(geocml_prep, run_script):
-    # Same area as clip05 in lon/lat (grid registration). lon_w and lat_s
-    # are on the frame edges, so the clamping branches of
-    # tools_lib.read_range_geo are exercised too.
+    # Same area as clip05 in lon/lat (grid registration). lat_s is on the
+    # frame edge, so the clamping branch of tools_lib.read_range_geo is
+    # exercised as well as the unclamped ones.
     run_script('LiCSBAS05op_clip_unw.py', '-i', 'GEOCml1',
-               '-o', 'GEOCml1clipg', '-g', '132.0/132.006/33.991/33.999',
+               '-o', 'GEOCml1clipg', '-g', '132.001/132.006/33.991/33.999',
                '--n_para', '1', cwd=geocml_prep.workdir)
     return geocml_prep.workdir / 'GEOCml1clipg'
