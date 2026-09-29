@@ -216,3 +216,173 @@ def build_geocml_defect(workdir):
         bad_ifg12=[LOOP_ERR_IFG], isolated_imd=ISOLATED_IMD,
         vel_mm=vel_truth_mm(), dt_cum=dt_cum_years(imdates_kept),
         wavelength=WAVELENGTH, coef_r2m=COEF_R2M)
+
+
+#%% GEOC dataset: GeoTIFF input of step 02
+# 2x the size of the GEOCml dataset, so that multilooking by NLOOK must give
+# back exactly unw_phase(). Each 2x2 block holds its GEOCml value plus a
+# checkerboard of +/-CHECKER, which averages out over a full block but not
+# over a partial one. That separates a correct nanmean from nodata being
+# treated as 0 or a block being taken by its first pixel.
+#
+# Defects, all in GEOC_DEFECT_IFG:
+#   - block (0, 0): 1 of 4 pixels valid         -> nan (< n_valid_thre 0.5)
+#   - block (0, 1): the 2 diagonal +CHECKER pixels valid -> value + CHECKER
+#   - block (0, 2): no pixel valid              -> nan
+#   - cc block (1, 0): 100, 101, 102, 103       -> 101 (mean 101.5, floored)
+# and
+#   - GEOC_FLOATCC_IFG has a float32 cc of 0-1 instead of uint8
+#   - GEOC_NOCC_IFG has no cc tif at all       -> no_unw_list.txt
+
+NLOOK = 2
+GEOC_WIDTH = WIDTH * NLOOK
+GEOC_LENGTH = LENGTH * NLOOK
+# Pixel registration (GeoTIFF convention): outer edges of the frame
+GEOC_LAT_N = 34.0
+GEOC_LON_W = 132.0
+GEOC_DLAT = -0.0005
+GEOC_DLON = 0.0005
+
+CHECKER = 0.1  # rad
+GEOC_CC = 200
+GEOC_FLOATCC = 0.5  # -> 127 after *255 and flooring
+GEOC_HGT = 100.0
+GEOC_MLI = 1000.0
+GEOC_ENU = {'E': 0.6, 'N': -0.1, 'U': 0.8}
+METADATA_FREQ = 5.40500045433e9
+METADATA_CENTER_TIME = '09:26:43.500000'
+
+GEOC_DEFECT_IFG = IFGDATES[0]
+GEOC_FLOATCC_IFG = IFGDATES[1]
+GEOC_NOCC_IFG = '{}_{}'.format(IMDATES[0], IMDATES[3])  # dates already used
+
+
+def _checker(length, width):
+    y, x = np.mgrid[0:length, 0:width]
+    return np.where((x + y) % 2 == 0, CHECKER, -CHECKER).astype(np.float32)
+
+
+def _upsample(a):
+    return np.kron(a, np.ones((NLOOK, NLOOK), dtype=a.dtype))
+
+
+def geoc_unw(ifgd):
+    """Full resolution unw (rad, float32, 0 as nodata) of ifgd in GEOC."""
+    unw = _upsample(unw_phase(ifgd[:8], ifgd[-8:])) \
+        + _checker(GEOC_LENGTH, GEOC_WIDTH)
+    if ifgd == GEOC_DEFECT_IFG:
+        # block (0,0): keep pixel (0,0) only
+        unw[0, 1] = unw[1, 0] = unw[1, 1] = 0
+        # block (0,1): keep the +CHECKER diagonal, pixels (0,2) and (1,3)
+        unw[0, 3] = unw[1, 2] = 0
+        # block (0,2): nothing valid
+        unw[0:2, 4:6] = 0
+    return unw.astype(np.float32)
+
+
+def geoc_unw_ml_expected(ifgd):
+    """What step 02 -n NLOOK must write for ifgd (nan as nodata)."""
+    unw = unw_phase(ifgd[:8], ifgd[-8:]).copy()
+    if ifgd == GEOC_DEFECT_IFG:
+        unw[0, 0] = np.nan
+        unw[0, 1] += CHECKER
+        unw[0, 2] = np.nan
+    return unw
+
+
+def geoc_cc(ifgd):
+    """Full resolution cc as written to the GEOC tif."""
+    if ifgd == GEOC_FLOATCC_IFG:
+        return np.full((GEOC_LENGTH, GEOC_WIDTH), GEOC_FLOATCC, np.float32)
+    cc = np.full((GEOC_LENGTH, GEOC_WIDTH), GEOC_CC, np.uint8)
+    if ifgd == GEOC_DEFECT_IFG:
+        cc[2:4, 0:2] = [[100, 101], [102, 103]]
+    return cc
+
+
+def geoc_cc_ml_expected(ifgd):
+    """What step 02 -n NLOOK must write for the cc of ifgd (uint8)."""
+    if ifgd == GEOC_FLOATCC_IFG:
+        return np.full((LENGTH, WIDTH), int(GEOC_FLOATCC * 255), np.uint8)
+    cc = np.full((LENGTH, WIDTH), GEOC_CC, np.uint8)
+    if ifgd == GEOC_DEFECT_IFG:
+        cc[1, 0] = 101
+    return cc
+
+
+def _write_geotiff(path, data):
+    import LiCSBAS_io_lib as io_lib
+    io_lib.make_geotiff(data, GEOC_LAT_N, GEOC_LON_W, GEOC_DLAT, GEOC_DLON,
+                        str(path), [])
+
+
+def build_geoc(workdir, metadata=True, baselines=True):
+    """Create workdir/GEOC (LiCSAR-like GeoTIFFs) and return its model."""
+    geocdir = workdir / 'GEOC'
+    geocdir.mkdir()
+
+    for ifgd in IFGDATES + [GEOC_NOCC_IFG]:
+        d = geocdir / ifgd
+        d.mkdir()
+        _write_geotiff(d / (ifgd + '.geo.unw.tif'), geoc_unw(ifgd))
+        if ifgd != GEOC_NOCC_IFG:
+            _write_geotiff(d / (ifgd + '.geo.cc.tif'), geoc_cc(ifgd))
+
+    frame = 'test_frame'
+    full = np.ones((GEOC_LENGTH, GEOC_WIDTH), np.float32)
+    _write_geotiff(geocdir / (frame + '.geo.hgt.tif'), full * GEOC_HGT)
+    _write_geotiff(geocdir / (frame + '.geo.mli.tif'), full * GEOC_MLI)
+    for enu, v in GEOC_ENU.items():
+        _write_geotiff(geocdir / '{}.geo.{}.tif'.format(frame, enu), full * v)
+
+    if metadata:
+        with open(geocdir / 'metadata.txt', 'w') as f:
+            print('center_time={}'.format(METADATA_CENTER_TIME), file=f)
+            print('radar_freq={}'.format(METADATA_FREQ), file=f)
+    if baselines:
+        write_baselines(geocdir / 'baselines')
+
+    return SimpleNamespace(workdir=workdir, geocdir=geocdir,
+                           ifgdates=IFGDATES + [GEOC_NOCC_IFG],
+                           ifgdates_ok=IFGDATES, nocc_ifg=GEOC_NOCC_IFG)
+
+
+#%% GEOCml dataset for steps 04 and 05
+# The clean GEOCml dataset plus what steps 04 and 05 act on:
+#   - one column of low coherence in every ifg      -> step 04 -c
+#   - one pixel of nodata (0) in every unw          -> must come out nan
+#   - float files (hgt, slc.mli) with a ramp        -> step 05 clips them
+#   - slc.mli.png and hgt.png                        -> step 05 recreates them
+
+PREP_LOWCC_COL = WIDTH - 1
+PREP_LOWCC = 30          # 30/255 = 0.12
+PREP_NODATA_YX = (LENGTH - 1, 0)
+
+
+def prep_hgt():
+    """hgt (m) with a distinct value in every pixel, to check clipping."""
+    return np.arange(LENGTH * WIDTH, dtype=np.float32).reshape(LENGTH, WIDTH)
+
+
+def build_geocml_prep(workdir):
+    """build_geocml plus the features steps 04 and 05 act on."""
+    truth = build_geocml(workdir)
+    geocdir = truth.geocdir
+
+    for ifgd in IFGDATES:
+        unwfile = geocdir / ifgd / (ifgd + '.unw')
+        unw = np.fromfile(str(unwfile), dtype=np.float32).reshape(LENGTH, WIDTH)
+        unw[PREP_NODATA_YX] = 0
+        write_img(unwfile, unw)
+
+        ccfile = geocdir / ifgd / (ifgd + '.cc')
+        cc = np.fromfile(str(ccfile), dtype=np.uint8).reshape(LENGTH, WIDTH)
+        cc[:, PREP_LOWCC_COL] = PREP_LOWCC
+        write_img(ccfile, cc)
+
+    write_img(geocdir / 'hgt', prep_hgt())
+    write_img(geocdir / 'slc.mli', prep_hgt() + 1000)
+    (geocdir / 'hgt.png').touch()
+    (geocdir / 'slc.mli.png').touch()
+
+    return truth

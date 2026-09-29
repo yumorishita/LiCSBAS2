@@ -161,3 +161,77 @@ def ts16d(ts15d, geocml_defect, run_script):
     run_script('LiCSBAS16_filt_ts.py', '-t', 'TS_GEOCml1', '--n_para', '1',
                cwd=geocml_defect.workdir)
     return ts15d
+
+
+# --- Steps 02, 04 and 05 (preparation of GEOCml) ---
+
+@pytest.fixture(scope='session')
+def geoc(tmp_path_factory):
+    """Synthetic GEOC (GeoTIFF) dataset. See synth.build_geoc."""
+    return synth.build_geoc(tmp_path_factory.mktemp('licsbas_geoc'))
+
+
+@pytest.fixture(scope='session')
+def geocml1_02(geoc, run_script):
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+               '--n_para', '1', cwd=geoc.workdir)
+    return geoc.workdir / 'GEOCml1'
+
+
+@pytest.fixture(scope='session')
+def geocml2_02(geoc, run_script):
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', str(synth.NLOOK),
+               '--n_para', '1', cwd=geoc.workdir)
+    return geoc.workdir / 'GEOCml{}'.format(synth.NLOOK)
+
+
+@pytest.fixture(scope='session')
+def geocml1_02_nometa(tmp_path_factory, run_script):
+    """Step 02 on GEOC without metadata.txt nor baselines, with --freq."""
+    geoc = synth.build_geoc(tmp_path_factory.mktemp('licsbas_geoc_nometa'),
+                            metadata=False, baselines=False)
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+               '--freq', '1.27e9', '--n_para', '1', cwd=geoc.workdir)
+    return geoc.workdir / 'GEOCml1'
+
+
+@pytest.fixture(scope='session')
+def geocml_prep(tmp_path_factory):
+    """Input GEOCml1 of steps 04 and 05. See synth.build_geocml_prep."""
+    return synth.build_geocml_prep(tmp_path_factory.mktemp('licsbas_prep'))
+
+
+@pytest.fixture(scope='session')
+def mask04(geocml_prep, run_script):
+    run_script('LiCSBAS04op_mask_unw.py', '-i', 'GEOCml1', '-o', 'GEOCml1mask',
+               '-c', '0.2', '-r', '0:2/0:3', '--n_para', '1',
+               cwd=geocml_prep.workdir)
+    return geocml_prep.workdir / 'GEOCml1mask'
+
+
+@pytest.fixture(scope='session')
+def mask04_file(geocml_prep, run_script):
+    rangefile = geocml_prep.workdir / 'mask_ranges.txt'
+    rangefile.write_text('3:5/4:6\n6:8/0:2\n')
+    run_script('LiCSBAS04op_mask_unw.py', '-i', 'GEOCml1',
+               '-o', 'GEOCml1maskf', '-f', rangefile.name, '--n_para', '1',
+               cwd=geocml_prep.workdir)
+    return geocml_prep.workdir / 'GEOCml1maskf'
+
+
+@pytest.fixture(scope='session')
+def clip05(geocml_prep, run_script):
+    run_script('LiCSBAS05op_clip_unw.py', '-i', 'GEOCml1', '-o', 'GEOCml1clip',
+               '-r', '0:7/1:10', '--n_para', '1', cwd=geocml_prep.workdir)
+    return geocml_prep.workdir / 'GEOCml1clip'
+
+
+@pytest.fixture(scope='session')
+def clip05_geo(geocml_prep, run_script):
+    # Same area as clip05 in lon/lat (grid registration). lon_w and lat_s
+    # are on the frame edges, so the clamping branches of
+    # tools_lib.read_range_geo are exercised too.
+    run_script('LiCSBAS05op_clip_unw.py', '-i', 'GEOCml1',
+               '-o', 'GEOCml1clipg', '-g', '132.0/132.006/33.991/33.999',
+               '--n_para', '1', cwd=geocml_prep.workdir)
+    return geocml_prep.workdir / 'GEOCml1clipg'
