@@ -91,7 +91,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.6"; date=20260818; author="Y. Morishita"
+    ver="1.6.7"; date=20260929; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -918,7 +918,7 @@ def calc_coh_avg(_ifgdates):
 
 def calc_n_unw(_ifgdates):
     n_unw = np.zeros((length, width), dtype=np.int16)
-    for ifgd in ifgdates:
+    for ifgd in _ifgdates:
         unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         unw = io_lib.read_img(unwfile, length, width)
 
