@@ -211,11 +211,35 @@ def geocml1_02_freq(geoc_nometa, run_script):
 
 @pytest.fixture(scope='session')
 def geocml1_02_freq_meta(geoc, run_script):
-    """Step 02 with both metadata.txt (with radar_freq) and --freq."""
+    """Step 02 with both metadata.txt (with radar_freq) and --freq.
+
+    Returns the output dir and the CompletedProcess (for the warning)."""
+    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+                     '-o', 'GEOCml1freq', '--freq', '1.27e9', '--n_para', '1',
+                     cwd=geoc.workdir)
+    return geoc.workdir / 'GEOCml1freq', res
+
+
+@pytest.fixture(scope='session')
+def geoc_meta_nofreq(tmp_path_factory):
+    """GEOC whose metadata.txt has center_time but no radar_freq."""
+    return synth.build_geoc(tmp_path_factory.mktemp('licsbas_geoc_nofreq'),
+                            metadata_freq=False)
+
+
+@pytest.fixture(scope='session')
+def geocml1_02_meta_nofreq(geoc_meta_nofreq, run_script):
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+               '--n_para', '1', cwd=geoc_meta_nofreq.workdir)
+    return geoc_meta_nofreq.workdir / 'GEOCml1'
+
+
+@pytest.fixture(scope='session')
+def geocml1_02_meta_nofreq_freq(geoc_meta_nofreq, run_script):
     run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
                '-o', 'GEOCml1freq', '--freq', '1.27e9', '--n_para', '1',
-               cwd=geoc.workdir)
-    return geoc.workdir / 'GEOCml1freq'
+               cwd=geoc_meta_nofreq.workdir)
+    return geoc_meta_nofreq.workdir / 'GEOCml1freq'
 
 
 @pytest.fixture(scope='session')

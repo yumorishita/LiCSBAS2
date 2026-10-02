@@ -46,6 +46,7 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
 #%% Import
 import getopt
 import os
+import re
 import sys
 import time
 import shutil
@@ -112,7 +113,10 @@ def main(argv=None):
             elif o == '-n':
                 nlook = int(a)
             elif o == '--freq':
-                radar_freq = float(a)
+                try:
+                    radar_freq = float(a)
+                except ValueError:
+                    raise Usage('--freq must be a number in Hz, not {}'.format(a))
             elif o == '--n_para':
                 n_para = int(a)
 
@@ -144,25 +148,35 @@ def main(argv=None):
     bperp_file_out = os.path.join(outdir, 'baselines')
 
     metadata_file = os.path.join(geocdir, 'metadata.txt')
+    center_time = None
+    radar_freq_meta = None
     if os.path.exists(metadata_file):
         print('Read metadata from {}'.format(os.path.basename(metadata_file)), flush=True)
         try:
             center_time = subp.check_output(['grep', 'center_time', metadata_file]).decode().split('=')[1].strip()
         except subp.CalledProcessError:
             print('  No center_time found in metadata.txt. Set to None.', flush=True)
-            center_time = None
-        if radar_freq is None: ## Not given by --freq
-            try:
-                radar_freq = subp.check_output(['grep', 'radar_freq', metadata_file]).decode().split('=')[1].strip()
-            except subp.CalledProcessError:
-                print('  No radar_freq found in metadata.txt. Set to default (5.405e9 Hz for Sentinel-1).', flush=True)
-                radar_freq = 5.405e9
-        else:
-            print('  Use radar_freq given by --freq ({} Hz)'.format(radar_freq), flush=True)
+        try:
+            radar_freq_meta = subp.check_output(['grep', 'radar_freq', metadata_file]).decode().split('=')[1].strip()
+        except subp.CalledProcessError:
+            print('  No radar_freq found in metadata.txt.', flush=True)
+
+    ### Radar frequency: --freq > metadata.txt > default (Sentinel-1)
+    if radar_freq is not None:
+        freq_src = '--freq'
+        if radar_freq_meta is not None and \
+           not np.isclose(float(radar_freq_meta), radar_freq):
+            print('WARNING: --freq overrides radar_freq in metadata.txt ({} Hz)!'.format(radar_freq_meta), file=sys.stderr, flush=True)
+    elif radar_freq_meta is not None:
+        radar_freq = radar_freq_meta
+        freq_src = 'metadata.txt'
     else:
-        center_time = None
-        if radar_freq is None: ## Not given by --freq
-            radar_freq = 5.405e9 # default for Sentinel-1
+        radar_freq = 5.405e9
+        freq_src = 'default for Sentinel-1'
+    print('Radar frequency: {} Hz ({})'.format(radar_freq, freq_src), flush=True)
+    if not 1e8 <= float(radar_freq) <= 1e11: ## 0.1-100 GHz, e.g. not in GHz
+        print('\nERROR: Radar frequency must be given in Hz!\n', file=sys.stderr)
+        return 2
 
     #%% ENU
     for ENU in ['E', 'N', 'U']:
@@ -330,6 +344,19 @@ def main(argv=None):
             print('radar_frequency: {} Hz'.format(radar_freq), file=f)
             if center_time is not None:
                 print('center_time: {}'.format(center_time), file=f)
+    else: ## Existing one is kept, but its radar_frequency may be wrong (#173)
+        radar_freq_par = io_lib.get_param_par(mlipar, 'radar_frequency')
+        if not np.isclose(float(radar_freq_par), float(radar_freq)):
+            if freq_src == '--freq': ## Explicitly given, so update
+                with open(mlipar) as f:
+                    text = f.read()
+                text = re.sub(r'radar_frequency:.*', 'radar_frequency: {} Hz'.format(radar_freq), text)
+                with open(mlipar, 'w') as f:
+                    f.write(text)
+                print('\nUpdate radar_frequency in existing slc.mli.par: {} -> {} Hz'.format(radar_freq_par, radar_freq), flush=True)
+                print('Steps after 02 must be rerun.', flush=True)
+            else:
+                print('\nWARNING: Existing slc.mli.par has radar_frequency {} Hz, not {} Hz ({}). Kept as is; use --freq to change it.'.format(radar_freq_par, radar_freq, freq_src), file=sys.stderr, flush=True)
 
     if not os.path.exists(dempar):
         print('\nCreate EQA.dem_par', flush=True)
