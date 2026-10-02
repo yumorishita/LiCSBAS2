@@ -76,7 +76,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.10"; date=20261002; author="Y. Morishita"
+    ver="1.7.11"; date=20261002; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -307,32 +307,40 @@ def main(argv=None):
         rc = tools_lib.run_pool(convert_wrapper, range(n_ifg2), n_para,
                                 mem_per_worker_mb=_mem_per_worker_mb)
 
-        ifgd_ok = []
         for i, _rc in enumerate(rc):
             if _rc == 1:
                 with open(no_unw_list, 'a') as f:
                     print('{}'.format(ifgdates2[i]), file=f)
-            elif _rc == 0:
-                ifgd_ok = ifgdates2[i] ## readable tiff
 
-        ### Read info
-        ## If all float already exist, this will not be done, but no problem because
-        ## par files should alerady exist!
-        if ifgd_ok:
-            unw_tiffile = os.path.join(geocdir, ifgd_ok, ifgd_ok+'.geo.unw.tif')
-            geotiff = gdal.Open(unw_tiffile)
-            width = geotiff.RasterXSize
-            length = geotiff.RasterYSize
-            lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
-            ## lat lon are in pixel registration. dlat is negative
-            lon_w_g = lon_w_p + dlon/2
-            lat_n_g = lat_n_p + dlat/2
-            ## to grit registration by shifting half pixel inside
-            if nlook != 1:
-                width = int(width/nlook)
-                length = int(length/nlook)
-                dlon = dlon*nlook
-                dlat = dlat*nlook
+
+    #%% Read info from a readable geotiff. Also when all float already exist,
+    ### so that missing par files can be (re)created.
+    geotiff = None
+    lon_w_g = lat_n_g = None
+    for ifgd in ifgdates:
+        try:
+            geotiff = gdal.Open(os.path.join(geocdir, ifgd, ifgd+'.geo.unw.tif'))
+            break
+        except RuntimeError: ## not exist or broken
+            continue
+
+    if geotiff is not None:
+        width = geotiff.RasterXSize
+        length = geotiff.RasterYSize
+        lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
+        geotiff = None
+        ## lat lon are in pixel registration. dlat is negative
+        if nlook != 1:
+            width = int(width/nlook)
+            length = int(length/nlook)
+            dlon = dlon*nlook
+            dlat = dlat*nlook
+        ## to grid registration by shifting half (multilooked) pixel inside
+        lon_w_g = lon_w_p + dlon/2
+        lat_n_g = lat_n_p + dlat/2
+    elif not (os.path.exists(mlipar) and os.path.exists(dempar)):
+        print('\nERROR: No readable unw geotiff in {} to create slc.mli.par and EQA.dem_par!\n'.format(geocdir), file=sys.stderr)
+        return 2
 
 
     #%% EQA.dem_par, slc.mli.par
@@ -390,6 +398,14 @@ def main(argv=None):
 
         with open(dempar, 'w') as f:
             f.write('\n'.join(text))
+    elif lon_w_g is not None: ## Existing one is kept; check its corner (#174)
+        corner = [float(io_lib.get_param_par(dempar, 'corner_lat')),
+                  float(io_lib.get_param_par(dempar, 'corner_lon'))]
+        if not np.allclose(corner, [lat_n_g, lon_w_g], rtol=0, atol=1e-9):
+            print('\nWARNING: corner_lat/lon in existing EQA.dem_par ({}/{}) differ from those of the geotiff ({}/{}),\n'
+                  'probably made by a previous version with -n > 1 (#174).\n'
+                  'Remove EQA.dem_par and rerun step 02 to recreate it, and rerun the later steps.'
+                  .format(*corner, lat_n_g, lon_w_g), file=sys.stderr, flush=True)
 
 
     #%% bperp

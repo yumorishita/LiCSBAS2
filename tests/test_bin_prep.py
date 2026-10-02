@@ -119,20 +119,66 @@ def test_step02_par_files_nlook2_size(geocml2_02):
         synth.GEOC_DLON * synth.NLOOK, **DEG)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason='#174: step 02 shifts the pixel-registration corner '
-                          'by half an ORIGINAL pixel even when multilooking, '
-                          'instead of half a multilooked pixel, so the grid '
-                          'is off by (nlook-1)/2 original pixels')
 def test_step02_corner_nlook2(geocml2_02):
     """The first multilooked pixel averages the first NLOOK x NLOOK
     original pixels, so its center is NLOOK/2 original pixels inside the
-    frame edge."""
+    frame edge (#174)."""
     dempar = geocml2_02 / 'EQA.dem_par'
     assert float(par(dempar, 'corner_lat')) == pytest.approx(
         synth.GEOC_LAT_N + synth.GEOC_DLAT * synth.NLOOK / 2, **DEG)
     assert float(par(dempar, 'corner_lon')) == pytest.approx(
         synth.GEOC_LON_W + synth.GEOC_DLON * synth.NLOOK / 2, **DEG)
+
+
+def test_step02_rerun_recreates_removed_dem_par(geoc, geocml2_02, run_script,
+                                                 tmp_path):
+    """EQA.dem_par removed from a GEOCml whose unw and cc all exist is
+    recreated on a rerun (the way to recover from #174); it used to fail
+    because the geometry was read only from newly converted ifgs."""
+    outdir = tmp_path / 'GEOCml2'
+    shutil.copytree(str(geocml2_02), str(outdir))
+    (outdir / 'EQA.dem_par').unlink()
+
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-o', str(outdir),
+               '-n', str(synth.NLOOK), '--n_para', '1', cwd=geoc.workdir)
+
+    assert filecmp.cmp(str(outdir / 'EQA.dem_par'),
+                       str(geocml2_02 / 'EQA.dem_par'), shallow=False)
+
+
+def test_step02_rerun_warns_wrong_corner(geoc, geocml2_02, run_script,
+                                         tmp_path):
+    """An existing EQA.dem_par with the corner of a version before the fix
+    of #174 is kept, with a warning telling how to recreate it."""
+    outdir = tmp_path / 'GEOCml2'
+    shutil.copytree(str(geocml2_02), str(outdir))
+    dempar = outdir / 'EQA.dem_par'
+    old_lat = synth.GEOC_LAT_N + synth.GEOC_DLAT / 2   # half an ORIGINAL px
+    old_lon = synth.GEOC_LON_W + synth.GEOC_DLON / 2
+    text = dempar.read_text()
+    text = re.sub(r'corner_lat:.*', 'corner_lat: {}'.format(old_lat), text)
+    text = re.sub(r'corner_lon:.*', 'corner_lon: {}'.format(old_lon), text)
+    dempar.write_text(text)
+
+    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-o', str(outdir),
+                     '-n', str(synth.NLOOK), '--n_para', '1', cwd=geoc.workdir)
+
+    assert dempar.read_text() == text
+    assert 'WARNING: corner_lat/lon in existing EQA.dem_par' in res.stderr
+
+
+def test_step02_no_readable_geotiff(bin_env, repo_root, tmp_path):
+    """Without any readable unw geotiff, the par files cannot be made: a
+    clear error, not an UnboundLocalError traceback."""
+    geocdir = tmp_path / 'GEOC'
+    (geocdir / synth.IFGDATES[0]).mkdir(parents=True)  # ifg dir, no tif
+    res = subprocess.run(
+        [sys.executable, str(repo_root / 'bin' / 'LiCSBAS02_ml_prep.py'),
+         '-i', str(geocdir), '-o', str(tmp_path / 'out'), '--n_para', '1'],
+        env=bin_env, capture_output=True, text=True, timeout=300)
+    assert res.returncode == 2
+    assert 'No readable unw geotiff' in res.stderr
+    assert 'Traceback' not in res.stderr
 
 
 @pytest.mark.parametrize('fixture', ['geocml1_02', 'geocml2_02'])
