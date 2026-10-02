@@ -210,6 +210,15 @@ def geocml1_02_freq(geoc_nometa, run_script):
 
 
 @pytest.fixture(scope='session')
+def geocml1_02_freq_meta(geoc, run_script):
+    """Step 02 with both metadata.txt (with radar_freq) and --freq."""
+    run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-n', '1',
+               '-o', 'GEOCml1freq', '--freq', '1.27e9', '--n_para', '1',
+               cwd=geoc.workdir)
+    return geoc.workdir / 'GEOCml1freq'
+
+
+@pytest.fixture(scope='session')
 def geocml_prep(tmp_path_factory):
     """Input GEOCml1 of steps 04 and 05. See synth.build_geocml_prep."""
     return synth.build_geocml_prep(tmp_path_factory.mktemp('licsbas_prep'))

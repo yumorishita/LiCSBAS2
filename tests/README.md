@@ -46,5 +46,4 @@ bug is fixed in a separate PR; when a fix lands, the test starts
 XPASS-ing and must be updated to assert the correct behavior. Open xfail
 tests (the reason of each marker names the issue):
 
-- `test_bin_prep.py::test_step02_freq_option` — #173
 - `test_bin_prep.py::test_step02_corner_nlook2` — #174

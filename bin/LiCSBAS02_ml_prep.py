@@ -36,7 +36,8 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
  -i  Path to the input GEOC dir containing stack of geotiff data
  -o  Path to the output GEOCml dir (Default: GEOCml[nlook])
  -n  Number of donwsampling factor (Default: 1, no donwsampling)
- --freq    Radar frequency in Hz (Default: 5.405e9 for Sentinel-1)
+ --freq    Radar frequency in Hz (Default: radar_freq in GEOCdir/metadata.txt
+           if exists, otherwise 5.405e9 for Sentinel-1)
            (e.g., 1.27e9 for ALOS, 1.2575e9 for ALOS-2/U, 1.2365e9 for ALOS-2/{F,W})
  --n_para  Number of parallel processing (Default: # of usable CPU-1)
 
@@ -74,7 +75,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.9"; date=20260908; author="Y. Morishita"
+    ver="1.7.10"; date=20261002; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -86,6 +87,7 @@ def main(argv=None):
     geocdir = []
     outdir = []
     nlook = 1
+    radar_freq = None ## --freq > metadata.txt > default (Sentinel-1)
     n_para = max(tools_lib.get_n_cpu_avail()-1, 1)
 
     cmap_wrap = tools_lib.get_cmap('cm_insar')
@@ -149,14 +151,18 @@ def main(argv=None):
         except subp.CalledProcessError:
             print('  No center_time found in metadata.txt. Set to None.', flush=True)
             center_time = None
-        try:
-            radar_freq = subp.check_output(['grep', 'radar_freq', metadata_file]).decode().split('=')[1].strip()
-        except subp.CalledProcessError:
-            print('  No radar_freq found in metadata.txt. Set to default (5.405e9 Hz for Sentinel-1).', flush=True)
-            radar_freq = 5.405e9
+        if radar_freq is None: ## Not given by --freq
+            try:
+                radar_freq = subp.check_output(['grep', 'radar_freq', metadata_file]).decode().split('=')[1].strip()
+            except subp.CalledProcessError:
+                print('  No radar_freq found in metadata.txt. Set to default (5.405e9 Hz for Sentinel-1).', flush=True)
+                radar_freq = 5.405e9
+        else:
+            print('  Use radar_freq given by --freq ({} Hz)'.format(radar_freq), flush=True)
     else:
         center_time = None
-        radar_freq = 5.405e9 # default for Sentinel-1
+        if radar_freq is None: ## Not given by --freq
+            radar_freq = 5.405e9 # default for Sentinel-1
 
     #%% ENU
     for ENU in ['E', 'N', 'U']:

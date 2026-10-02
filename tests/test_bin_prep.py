@@ -164,14 +164,19 @@ def test_step02_defaults_without_metadata(geocml1_02_nometa):
     assert np.all(np.abs(bperp) <= 1)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason='#173: the default radar_freq (5.405e9) is assigned '
-                          'after the options are parsed, so --freq is always '
-                          'overwritten')
 def test_step02_freq_option(geocml1_02_freq):
+    """--freq is used when metadata.txt does not exist (#173)."""
     radar_freq = float(par(geocml1_02_freq / 'slc.mli.par',
                            'radar_frequency'))
     assert radar_freq == pytest.approx(1.27e9)
+
+
+def test_step02_freq_option_overrides_metadata(geocml1_02_freq_meta):
+    """--freq wins over radar_freq in metadata.txt, while the rest of
+    metadata.txt (center_time) is still used."""
+    mlipar = geocml1_02_freq_meta / 'slc.mli.par'
+    assert float(par(mlipar, 'radar_frequency')) == pytest.approx(1.27e9)
+    assert par(mlipar, 'center_time') == synth.METADATA_CENTER_TIME
 
 
 def test_step02_rerun_skips_existing(geoc, geocml1_02, run_script, tmp_path):
