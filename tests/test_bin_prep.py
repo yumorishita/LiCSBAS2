@@ -1,10 +1,11 @@
-"""End-to-end tests of the preparation steps 02, 04 and 05 on synthetic data.
+"""End-to-end tests of the preparation steps 02-05 on synthetic data.
 
 Step 02 converts LiCSAR-like GeoTIFFs (GEOC) to the raw GEOCml format,
-optionally multilooking them; steps 04 (mask) and 05 (clip) rewrite
-GEOCml. All three change the data every later step works on, so their
-outputs are checked value by value against a model of the input
-(tests/synth.py: build_geoc, build_geocml_prep), not only for existence.
+optionally multilooking them; steps 03 (GACOS), 04 (mask) and 05 (clip)
+rewrite GEOCml. All of them change the data every later step works on, so
+their outputs are checked value by value against a model of the input
+(tests/synth.py: build_geoc, build_geocml_gacos, build_geocml_prep), not
+only for existence.
 """
 import filecmp
 import os
@@ -470,3 +471,97 @@ def test_steps04_05_leave_input_untouched(geocml_prep, mask04, mask04_file,
                                       geocml_prep.unw_in[ifgd])
         np.testing.assert_array_equal(read_cc(geocml_prep.geocdir, ifgd, L, W),
                                       geocml_prep.cc_in[ifgd])
+
+
+#%% Step 03: GACOS
+@pytest.mark.parametrize('fixture, ztd', [('gacos03', False),
+                                           ('gacos03_ztd', True)])
+def test_step03_sltd_on_pixel_centers(fixture, ztd, request):
+    """GACOS delays must be resampled at the pixel centers of GEOCml (#178);
+    the synthetic delays are linear, so any shift or shrink of the grid
+    shows up as an error. ztd (m) is also converted to slant range (rad)."""
+    d = request.getfixturevalue(fixture)
+    for imd in synth.IMDATES:
+        sltd = io_lib.read_img(str(d / 'sltd' / (imd + '.sltd.geo')), L, W)
+        np.testing.assert_allclose(sltd, synth.gacos_sltd_expected(imd, ztd),
+                                   rtol=1e-6, atol=1e-4, err_msg=imd)
+
+
+def test_step03_corrected_unw(geocml_gacos, gacos03):
+    for ifgd in synth.IFGDATES:
+        unw = read_unw(geocml_gacos.geocdir, ifgd, L, W)
+        dsltd = synth.gacos_sltd_expected(ifgd[-8:]) \
+            - synth.gacos_sltd_expected(ifgd[:8])
+        np.testing.assert_allclose(read_unw(gacos03, ifgd, L, W),
+                                   unw - dsltd, atol=1e-4, err_msg=ifgd)
+        assert filecmp.cmp(str(geocml_gacos.geocdir / ifgd / (ifgd + '.cc')),
+                           str(gacos03 / ifgd / (ifgd + '.cc')), shallow=False)
+    assert (gacos03 / 'GACOS_info.txt').exists()
+    assert not (gacos03 / 'no_gacos_ifg.txt').exists()
+
+
+def test_step03_sltd_grid_file(gacos03):
+    """The grid the sltd were resampled onto is recorded: outer edges of
+    the GEOCml frame, width and length."""
+    w, s, e, n, width, length = \
+        (gacos03 / 'sltd' / 'sltd_grid.txt').read_text().split()
+    post, half = synth.GEOCML_POST, synth.GEOCML_POST / 2
+    assert [float(v) for v in (w, s, e, n)] == pytest.approx(
+        [synth.GEOCML_LON_W - half,
+         synth.GEOCML_LAT_N - post * (L - 1) - half,
+         synth.GEOCML_LON_W + post * (W - 1) + half,
+         synth.GEOCML_LAT_N + half], **DEG)
+    assert (int(float(width)), int(float(length))) == (W, L)
+
+
+@pytest.mark.parametrize('rounding', [False, True])
+def test_step03_rerun_ok(rounding, geocml_gacos, gacos03, run_script,
+                         tmp_path):
+    """A rerun on outputs of this version keeps them without complaint,
+    also if the recorded grid differs only by rounding (e.g. EQA.dem_par
+    recreated under another GDAL)."""
+    outdir = tmp_path / 'GEOCml1GACOS'
+    shutil.copytree(str(gacos03), str(outdir))
+    gridfile = outdir / 'sltd' / 'sltd_grid.txt'
+    if rounding:
+        gridfile.write_text(' '.join(str(float(v) + 1e-13) for v in
+                                     gridfile.read_text().split()) + '\n')
+    before = gridfile.read_text()
+    res = run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', str(outdir),
+                     '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
+    assert 'ERROR' not in res.stderr and 'WARNING' not in res.stderr
+    assert gridfile.read_text() == before
+
+
+@pytest.mark.parametrize('stale', ['no_grid_file', 'other_grid', 'no_sltd_dir'])
+def test_step03_stops_on_stale_outputs(stale, geocml_gacos, gacos03, bin_env,
+                                       repo_root, tmp_path):
+    """Existing outputs made by a version before #178 was fixed (no grid
+    file) or on another grid (e.g. before EQA.dem_par was recreated, #174)
+    would be mixed with new ones on the current grid, so step 03 stops,
+    telling to remove them, and touches nothing. Also when only the
+    corrected unw are left, and with glob metacharacters in the path."""
+    outdir = tmp_path / 'GEOCml1[v2]GACOS'
+    shutil.copytree(str(gacos03), str(outdir))
+    sltddir = outdir / 'sltd'
+    gridfile = sltddir / 'sltd_grid.txt'
+    if stale == 'no_grid_file':
+        gridfile.unlink()
+    elif stale == 'other_grid':
+        gridfile.write_text('132.0 33.991 132.009 34.0 10 10\n')
+    else:
+        shutil.rmtree(str(sltddir))
+    before = {p: p.read_bytes() for p in outdir.rglob('*')
+              if p.is_file() and not p.is_symlink()}
+
+    res = subprocess.run(
+        [sys.executable, str(repo_root / 'bin' / 'LiCSBAS03op_GACOS.py'),
+         '-i', 'GEOCml1', '-o', str(outdir), '-g', 'GACOS', '--n_para', '1'],
+        cwd=str(geocml_gacos.workdir), env=bin_env, capture_output=True,
+        text=True, timeout=300)
+
+    assert res.returncode == 1
+    assert 'ERROR: Existing outputs' in res.stderr
+    assert 'Remove {}'.format(outdir) in res.stderr
+    assert {p: p.read_bytes() for p in outdir.rglob('*')
+            if p.is_file() and not p.is_symlink()} == before

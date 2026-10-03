@@ -31,6 +31,8 @@ Outputs in GEOCml*GACOS/
  - no_gacos_im.txt  : List of images with no available GACOS data
  - sltd/
    - yyyymmdd.sltd.geo : Slantrange tropospheric delay in rad
+   - sltd_grid.txt     : Grid the GACOS data are resampled onto (to detect
+                         outputs made on another grid)
  - other files needed for following time series analysis
 
 =====
@@ -135,7 +137,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.5.9"; date=20260829; author="Y. Morishita"
+    ver="1.5.10"; date=20261003; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -231,7 +233,9 @@ def main(argv=None):
     lonw_geo = float(io_lib.get_param_par(dempar, 'corner_lon'))
     lats_geo = latn_geo+dlat_geo*(length_geo-1)
     lone_geo = lonw_geo+dlon_geo*(width_geo-1)
-    outputBounds = (lonw_geo, lats_geo, lone_geo, latn_geo)
+    ## outputBounds of gdal.Warp are the outer edges, i.e. pixel registration
+    outputBounds = (lonw_geo-dlon_geo/2, lats_geo+dlat_geo/2,
+                    lone_geo+dlon_geo/2, latn_geo-dlat_geo/2)
 
     ### Check coordinate
     if width_unw!=width_geo or length_unw!=length_geo:
@@ -250,6 +254,32 @@ def main(argv=None):
     n_ifg = len(ifgdates)
     n_im = len(imdates)
 
+
+    #%% Check the grid of existing outputs. They are not re-created, so
+    ### outputs made on another grid would remain and be mixed with new ones:
+    ### by a version before 1.5.10, whose grid was shrunk by one pixel (#178),
+    ### or before EQA.dem_par was recreated (#174).
+    sltd_gridfile = os.path.join(sltddir, 'sltd_grid.txt')
+    sltd_grid = list(outputBounds) + [width_geo, length_geo]
+    if not (glob.glob(os.path.join(glob.escape(sltddir), '*.sltd.geo')) or
+            glob.glob(os.path.join(glob.escape(out_dir), '*', '*.unw'))):
+        with open(sltd_gridfile, 'w') as f:
+            print(' '.join(str(v) for v in sltd_grid), file=f)
+    else:
+        try:
+            with open(sltd_gridfile) as f:
+                sltd_grid_old = [float(v) for v in f.read().split()]
+        except (OSError, ValueError): ## No record: made by a previous version
+            sltd_grid_old = []
+        if len(sltd_grid_old) != len(sltd_grid) or \
+           not np.allclose(sltd_grid_old, sltd_grid, rtol=0, atol=1e-9):
+            out_base = os.path.basename(out_dir)
+            print('\nERROR: Existing outputs in {} were made on another grid than the current one,\n'
+                  'by a version before 1.5.10 (#178) or before EQA.dem_par was recreated (#174).\n'
+                  'Remove {} and the outputs of the later steps made from it\n'
+                  '(e.g., {}mask, ...clip, TS_{}) and rerun them, because existing outputs are not recreated.\n'
+                  .format(out_dir, out_dir, out_base, out_base), file=sys.stderr, flush=True)
+            return 1
 
     #%% Process ztd files
     print('\nConvert ztd/sltd.geo.tif files to sltd.geo files...', flush=True)
