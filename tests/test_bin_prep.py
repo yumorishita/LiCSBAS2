@@ -470,3 +470,70 @@ def test_steps04_05_leave_input_untouched(geocml_prep, mask04, mask04_file,
                                       geocml_prep.unw_in[ifgd])
         np.testing.assert_array_equal(read_cc(geocml_prep.geocdir, ifgd, L, W),
                                       geocml_prep.cc_in[ifgd])
+
+
+#%% Step 03: GACOS
+def test_step03_sltd_on_pixel_centers(gacos03):
+    """GACOS sltd must be resampled at the pixel centers of GEOCml (#178);
+    the synthetic sltd are linear, so any shift or shrink of the grid
+    shows up as an error."""
+    for imd in synth.IMDATES:
+        sltd = io_lib.read_img(str(gacos03 / 'sltd' / (imd + '.sltd.geo')),
+                               L, W)
+        np.testing.assert_allclose(sltd, synth.gacos_sltd_expected(imd),
+                                   atol=1e-4, err_msg=imd)
+
+
+def test_step03_corrected_unw(geocml_gacos, gacos03):
+    for ifgd in synth.IFGDATES:
+        unw = read_unw(geocml_gacos.geocdir, ifgd, L, W)
+        dsltd = synth.gacos_sltd_expected(ifgd[-8:]) \
+            - synth.gacos_sltd_expected(ifgd[:8])
+        np.testing.assert_allclose(read_unw(gacos03, ifgd, L, W),
+                                   unw - dsltd, atol=1e-4, err_msg=ifgd)
+        assert filecmp.cmp(str(geocml_gacos.geocdir / ifgd / (ifgd + '.cc')),
+                           str(gacos03 / ifgd / (ifgd + '.cc')), shallow=False)
+    assert (gacos03 / 'GACOS_info.txt').exists()
+    assert not (gacos03 / 'no_gacos_ifg.txt').exists()
+
+
+def test_step03_sltd_grid_file(gacos03):
+    """The grid the sltd were resampled onto is recorded: outer edges of
+    the GEOCml frame, width and length."""
+    w, s, e, n, width, length = \
+        (gacos03 / 'sltd' / 'sltd_grid.txt').read_text().split()
+    half = 0.001 / 2
+    assert [float(v) for v in (w, s, e, n)] == pytest.approx(
+        [132.0 - half, 34.0 - 0.001 * (L - 1) - half,
+         132.0 + 0.001 * (W - 1) + half, 34.0 + half], abs=1e-9)
+    assert (int(width), int(length)) == (W, L)
+
+
+def test_step03_rerun_no_warning(geocml_gacos, gacos03, run_script, tmp_path):
+    """A rerun on outputs of this version keeps them and does not warn."""
+    outdir = tmp_path / 'GEOCml1GACOS'
+    shutil.copytree(str(gacos03), str(outdir))
+    before = (outdir / 'sltd' / 'sltd_grid.txt').read_text()
+    res = run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', str(outdir),
+                     '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
+    assert 'WARNING' not in res.stderr
+    assert (outdir / 'sltd' / 'sltd_grid.txt').read_text() == before
+
+
+@pytest.mark.parametrize('stale', ['no_grid_file', 'other_grid'])
+def test_step03_warns_stale_sltd(stale, geocml_gacos, gacos03, run_script,
+                                 tmp_path):
+    """Existing sltd made by a version before #178 was fixed (no grid file)
+    or on another grid (e.g. before EQA.dem_par was recreated, #174) are
+    kept, as all outputs are, but a warning tells to remove them."""
+    outdir = tmp_path / 'GEOCml1GACOS'
+    shutil.copytree(str(gacos03), str(outdir))
+    gridfile = outdir / 'sltd' / 'sltd_grid.txt'
+    if stale == 'no_grid_file':
+        gridfile.unlink()
+    else:
+        gridfile.write_text('132.0 33.991 132.009 34.0 10 10\n')
+    res = run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', str(outdir),
+                     '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
+    assert 'WARNING: Existing sltd' in res.stderr
+    assert 'Remove {}'.format(outdir) in res.stderr

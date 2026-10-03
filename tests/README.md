@@ -33,10 +33,11 @@ also acts as an early warning when a new upstream release breaks LiCSBAS.
   2pi unwrapping error) and checks that exactly the bad ifgs are rejected,
   nodata stays nan and the velocity still matches the truth.
 - `test_bin_prep.py` (marker `smoke`) — runs steps 02 (GeoTIFF ->
-  GEOCml, with and without multilooking), 04 (mask) and 05 (clip) and
-  checks their outputs value by value.
+  GEOCml, with and without multilooking), 03 (GACOS), 04 (mask) and 05
+  (clip) and checks their outputs value by value.
 - `synth.py` — builders of the synthetic datasets: GEOCml (clean and
-  defective), GEOC GeoTIFFs for step 02, and GEOCml for steps 04/05.
+  defective), GEOC GeoTIFFs for step 02, GACOS sltd for step 03, and
+  GEOCml for steps 04/05.
 
 ## Known bugs pinned with xfail
 

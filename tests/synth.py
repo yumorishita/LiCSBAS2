@@ -409,3 +409,57 @@ def build_geocml_prep(workdir):
     (geocdir / 'slc.mli.png').touch()
 
     return truth
+
+
+#%% GACOS dataset for step 03
+# The clean GEOCml dataset plus U.geo and GACOS/yyyymmdd.sltd.geo.tif.
+# Each sltd (rad) is linear in lon and lat with a slope that differs per
+# epoch, on a finer grid (GACOS_SUB per GEOCml pixel) extending GACOS_MARGIN
+# GEOCml pixels beyond the frame. Resampling reproduces a linear field
+# exactly, so the sltd step 03 writes must equal gacos_sltd() at the
+# GEOCml pixel centers; a grid shifted or shrunk by a fraction of a pixel
+# shows up as an error of slope x shift.
+
+GACOS_SUB = 2
+GACOS_MARGIN = 5
+LOS_U = 0.8
+
+
+def gacos_sltd(imd, lon, lat):
+    """sltd (rad) of epoch imd at lon/lat, linear; never 0 (nodata)."""
+    e = IMDATES.index(imd)
+    x = (lon - 132.0) / 0.001      # GEOCml pixel coordinates (synth dem_par)
+    y = (34.0 - lat) / 0.001
+    return 100.0 + e + 0.2 * e * x + 0.1 * e * y
+
+
+def gacos_sltd_expected(imd):
+    """sltd at the GEOCml pixel centers, as step 03 must write it."""
+    lon, lat = np.meshgrid(132.0 + 0.001 * np.arange(WIDTH),
+                           34.0 - 0.001 * np.arange(LENGTH))
+    return gacos_sltd(imd, lon, lat).astype(np.float32)
+
+
+def build_geocml_gacos(workdir):
+    """build_geocml plus U.geo and GACOS/*.sltd.geo.tif."""
+    import LiCSBAS_io_lib as io_lib
+    truth = build_geocml(workdir)
+    write_img(truth.geocdir / 'U.geo',
+              np.full((LENGTH, WIDTH), LOS_U, dtype=np.float32))
+
+    gacosdir = workdir / 'GACOS'
+    gacosdir.mkdir()
+    d = 0.001 / GACOS_SUB
+    n = GACOS_SUB * (WIDTH + 2 * GACOS_MARGIN)
+    m = GACOS_SUB * (LENGTH + 2 * GACOS_MARGIN)
+    lon_w = 132.0 - 0.001 / 2 - GACOS_MARGIN * 0.001   # outer edges
+    lat_n = 34.0 + 0.001 / 2 + GACOS_MARGIN * 0.001
+    lon, lat = np.meshgrid(lon_w + (np.arange(n) + 0.5) * d,
+                           lat_n - (np.arange(m) + 0.5) * d)
+    for imd in IMDATES:
+        io_lib.make_geotiff(gacos_sltd(imd, lon, lat).astype(np.float32),
+                            lat_n, lon_w, -d, d,
+                            str(gacosdir / (imd + '.sltd.geo.tif')), [])
+
+    truth.gacosdir = gacosdir
+    return truth
