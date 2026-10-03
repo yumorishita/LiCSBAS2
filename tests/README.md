@@ -43,7 +43,5 @@ also acts as an early warning when a new upstream release breaks LiCSBAS.
 Latent bugs found while writing tests are pinned with
 `xfail(strict=True)` markers: such a test is expected to fail until the
 bug is fixed in a separate PR; when a fix lands, the test starts
-XPASS-ing and must be updated to assert the correct behavior. Open xfail
-tests (the reason of each marker names the issue):
-
-- `test_bin_prep.py::test_step02_corner_nlook2` — #174
+XPASS-ing and must be updated to assert the correct behavior. There are
+currently no open xfail tests.
