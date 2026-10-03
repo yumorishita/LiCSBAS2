@@ -297,3 +297,11 @@ def gacos03(geocml_gacos, run_script):
     run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', 'GEOCml1GACOS',
                '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
     return geocml_gacos.workdir / 'GEOCml1GACOS'
+
+
+@pytest.fixture(scope='session')
+def gacos03_ztd(geocml_gacos, run_script):
+    """Step 03 from ztd.tif (m) instead of sltd.geo.tif (rad)."""
+    run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', 'GEOCml1GACOSztd',
+               '-g', 'GACOS_ztd', '--n_para', '1', cwd=geocml_gacos.workdir)
+    return geocml_gacos.workdir / 'GEOCml1GACOSztd'

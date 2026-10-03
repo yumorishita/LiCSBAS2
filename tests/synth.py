@@ -26,6 +26,11 @@ BPERP = [0.0, 30.0, -55.0, 12.0, 80.0]
 
 GEOCML_CC = 180  # uint8 coherence of every pixel of the clean dataset
 
+# EQA.dem_par of GEOCml (grid registration: center of the first pixel)
+GEOCML_LAT_N = 34.0
+GEOCML_LON_W = 132.0
+GEOCML_POST = 0.001
+
 
 def vel_truth_mm():
     """True velocity field (mm/yr), strictly positive everywhere."""
@@ -57,8 +62,9 @@ def write_mli_par(path, width=WIDTH, length=LENGTH,
         print('radar_frequency:  {} Hz'.format(radar_frequency), file=f)
 
 
-def write_dem_par(path, width=WIDTH, length=LENGTH, corner_lat=34.0,
-                  corner_lon=132.0, post_lat=-0.001, post_lon=0.001):
+def write_dem_par(path, width=WIDTH, length=LENGTH, corner_lat=GEOCML_LAT_N,
+                  corner_lon=GEOCML_LON_W, post_lat=-GEOCML_POST,
+                  post_lon=GEOCML_POST):
     with open(path, 'w') as f:
         print('width:          {}'.format(width), file=f)
         print('nlines:         {}'.format(length), file=f)
@@ -412,13 +418,13 @@ def build_geocml_prep(workdir):
 
 
 #%% GACOS dataset for step 03
-# The clean GEOCml dataset plus U.geo and GACOS/yyyymmdd.sltd.geo.tif.
-# Each sltd (rad) is linear in lon and lat with a slope that differs per
-# epoch, on a finer grid (GACOS_SUB per GEOCml pixel) extending GACOS_MARGIN
-# GEOCml pixels beyond the frame. Resampling reproduces a linear field
-# exactly, so the sltd step 03 writes must equal gacos_sltd() at the
-# GEOCml pixel centers; a grid shifted or shrunk by a fraction of a pixel
-# shows up as an error of slope x shift.
+# The clean GEOCml dataset plus U.geo, GACOS/yyyymmdd.sltd.geo.tif (rad)
+# and GACOS_ztd/yyyymmdd.ztd.tif (m). Each delay is linear in lon and lat
+# with a slope that differs per epoch, on a finer grid (GACOS_SUB per
+# GEOCml pixel) extending GACOS_MARGIN GEOCml pixels beyond the frame.
+# Resampling reproduces a linear field exactly, so the sltd step 03 writes
+# must equal gacos_sltd_expected() at the GEOCml pixel centers; a grid
+# shifted or shrunk by a fraction of a pixel shows up as slope x shift.
 
 GACOS_SUB = 2
 GACOS_MARGIN = 5
@@ -428,38 +434,60 @@ LOS_U = 0.8
 def gacos_sltd(imd, lon, lat):
     """sltd (rad) of epoch imd at lon/lat, linear; never 0 (nodata)."""
     e = IMDATES.index(imd)
-    x = (lon - 132.0) / 0.001      # GEOCml pixel coordinates (synth dem_par)
-    y = (34.0 - lat) / 0.001
+    x = (lon - GEOCML_LON_W) / GEOCML_POST   # GEOCml pixel coordinates
+    y = (GEOCML_LAT_N - lat) / GEOCML_POST
     return 100.0 + e + 0.2 * e * x + 0.1 * e * y
 
 
-def gacos_sltd_expected(imd):
-    """sltd at the GEOCml pixel centers, as step 03 must write it."""
-    lon, lat = np.meshgrid(132.0 + 0.001 * np.arange(WIDTH),
-                           34.0 - 0.001 * np.arange(LENGTH))
-    return gacos_sltd(imd, lon, lat).astype(np.float32)
+def gacos_ztd(imd, lon, lat):
+    """ztd (m) of epoch imd at lon/lat, linear; never 0 (nodata)."""
+    return gacos_sltd(imd, lon, lat) / 100
+
+
+def _geocml_centers():
+    return np.meshgrid(GEOCML_LON_W + GEOCML_POST * np.arange(WIDTH),
+                       GEOCML_LAT_N - GEOCML_POST * np.arange(LENGTH))
+
+
+def gacos_sltd_expected(imd, ztd=False):
+    """sltd (rad) at the GEOCml pixel centers, as step 03 must write it,
+    from GACOS/*.sltd.geo.tif or, with ztd=True, GACOS_ztd/*.ztd.tif
+    (ztd/cos(inc)*4pi/wavelength, with U.geo = cos(inc) = LOS_U)."""
+    if ztd:
+        sltd = gacos_ztd(imd, *_geocml_centers()) / LOS_U \
+            * 4 * np.pi / WAVELENGTH
+    else:
+        sltd = gacos_sltd(imd, *_geocml_centers())
+    return sltd.astype(np.float32)
 
 
 def build_geocml_gacos(workdir):
-    """build_geocml plus U.geo and GACOS/*.sltd.geo.tif."""
+    """build_geocml plus U.geo, GACOS/*.sltd.geo.tif and
+    GACOS_ztd/*.ztd.tif."""
     import LiCSBAS_io_lib as io_lib
     truth = build_geocml(workdir)
     write_img(truth.geocdir / 'U.geo',
               np.full((LENGTH, WIDTH), LOS_U, dtype=np.float32))
 
     gacosdir = workdir / 'GACOS'
+    ztddir = workdir / 'GACOS_ztd'
     gacosdir.mkdir()
-    d = 0.001 / GACOS_SUB
+    ztddir.mkdir()
+    d = GEOCML_POST / GACOS_SUB
     n = GACOS_SUB * (WIDTH + 2 * GACOS_MARGIN)
     m = GACOS_SUB * (LENGTH + 2 * GACOS_MARGIN)
-    lon_w = 132.0 - 0.001 / 2 - GACOS_MARGIN * 0.001   # outer edges
-    lat_n = 34.0 + 0.001 / 2 + GACOS_MARGIN * 0.001
+    lon_w = GEOCML_LON_W - GEOCML_POST * (0.5 + GACOS_MARGIN)  # outer edges
+    lat_n = GEOCML_LAT_N + GEOCML_POST * (0.5 + GACOS_MARGIN)
     lon, lat = np.meshgrid(lon_w + (np.arange(n) + 0.5) * d,
                            lat_n - (np.arange(m) + 0.5) * d)
     for imd in IMDATES:
         io_lib.make_geotiff(gacos_sltd(imd, lon, lat).astype(np.float32),
                             lat_n, lon_w, -d, d,
                             str(gacosdir / (imd + '.sltd.geo.tif')), [])
+        io_lib.make_geotiff(gacos_ztd(imd, lon, lat).astype(np.float32),
+                            lat_n, lon_w, -d, d,
+                            str(ztddir / (imd + '.ztd.tif')), [])
 
     truth.gacosdir = gacosdir
+    truth.ztddir = ztddir
     return truth

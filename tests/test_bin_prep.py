@@ -1,10 +1,11 @@
-"""End-to-end tests of the preparation steps 02, 04 and 05 on synthetic data.
+"""End-to-end tests of the preparation steps 02-05 on synthetic data.
 
 Step 02 converts LiCSAR-like GeoTIFFs (GEOC) to the raw GEOCml format,
-optionally multilooking them; steps 04 (mask) and 05 (clip) rewrite
-GEOCml. All three change the data every later step works on, so their
-outputs are checked value by value against a model of the input
-(tests/synth.py: build_geoc, build_geocml_prep), not only for existence.
+optionally multilooking them; steps 03 (GACOS), 04 (mask) and 05 (clip)
+rewrite GEOCml. All of them change the data every later step works on, so
+their outputs are checked value by value against a model of the input
+(tests/synth.py: build_geoc, build_geocml_gacos, build_geocml_prep), not
+only for existence.
 """
 import filecmp
 import os
@@ -473,15 +474,17 @@ def test_steps04_05_leave_input_untouched(geocml_prep, mask04, mask04_file,
 
 
 #%% Step 03: GACOS
-def test_step03_sltd_on_pixel_centers(gacos03):
-    """GACOS sltd must be resampled at the pixel centers of GEOCml (#178);
-    the synthetic sltd are linear, so any shift or shrink of the grid
-    shows up as an error."""
+@pytest.mark.parametrize('fixture, ztd', [('gacos03', False),
+                                           ('gacos03_ztd', True)])
+def test_step03_sltd_on_pixel_centers(fixture, ztd, request):
+    """GACOS delays must be resampled at the pixel centers of GEOCml (#178);
+    the synthetic delays are linear, so any shift or shrink of the grid
+    shows up as an error. ztd (m) is also converted to slant range (rad)."""
+    d = request.getfixturevalue(fixture)
     for imd in synth.IMDATES:
-        sltd = io_lib.read_img(str(gacos03 / 'sltd' / (imd + '.sltd.geo')),
-                               L, W)
-        np.testing.assert_allclose(sltd, synth.gacos_sltd_expected(imd),
-                                   atol=1e-4, err_msg=imd)
+        sltd = io_lib.read_img(str(d / 'sltd' / (imd + '.sltd.geo')), L, W)
+        np.testing.assert_allclose(sltd, synth.gacos_sltd_expected(imd, ztd),
+                                   rtol=1e-6, atol=1e-4, err_msg=imd)
 
 
 def test_step03_corrected_unw(geocml_gacos, gacos03):
@@ -502,38 +505,63 @@ def test_step03_sltd_grid_file(gacos03):
     the GEOCml frame, width and length."""
     w, s, e, n, width, length = \
         (gacos03 / 'sltd' / 'sltd_grid.txt').read_text().split()
-    half = 0.001 / 2
+    post, half = synth.GEOCML_POST, synth.GEOCML_POST / 2
     assert [float(v) for v in (w, s, e, n)] == pytest.approx(
-        [132.0 - half, 34.0 - 0.001 * (L - 1) - half,
-         132.0 + 0.001 * (W - 1) + half, 34.0 + half], abs=1e-9)
-    assert (int(width), int(length)) == (W, L)
+        [synth.GEOCML_LON_W - half,
+         synth.GEOCML_LAT_N - post * (L - 1) - half,
+         synth.GEOCML_LON_W + post * (W - 1) + half,
+         synth.GEOCML_LAT_N + half], **DEG)
+    assert (int(float(width)), int(float(length))) == (W, L)
 
 
-def test_step03_rerun_no_warning(geocml_gacos, gacos03, run_script, tmp_path):
-    """A rerun on outputs of this version keeps them and does not warn."""
-    outdir = tmp_path / 'GEOCml1GACOS'
-    shutil.copytree(str(gacos03), str(outdir))
-    before = (outdir / 'sltd' / 'sltd_grid.txt').read_text()
-    res = run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', str(outdir),
-                     '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
-    assert 'WARNING' not in res.stderr
-    assert (outdir / 'sltd' / 'sltd_grid.txt').read_text() == before
-
-
-@pytest.mark.parametrize('stale', ['no_grid_file', 'other_grid'])
-def test_step03_warns_stale_sltd(stale, geocml_gacos, gacos03, run_script,
-                                 tmp_path):
-    """Existing sltd made by a version before #178 was fixed (no grid file)
-    or on another grid (e.g. before EQA.dem_par was recreated, #174) are
-    kept, as all outputs are, but a warning tells to remove them."""
+@pytest.mark.parametrize('rounding', [False, True])
+def test_step03_rerun_ok(rounding, geocml_gacos, gacos03, run_script,
+                         tmp_path):
+    """A rerun on outputs of this version keeps them without complaint,
+    also if the recorded grid differs only by rounding (e.g. EQA.dem_par
+    recreated under another GDAL)."""
     outdir = tmp_path / 'GEOCml1GACOS'
     shutil.copytree(str(gacos03), str(outdir))
     gridfile = outdir / 'sltd' / 'sltd_grid.txt'
-    if stale == 'no_grid_file':
-        gridfile.unlink()
-    else:
-        gridfile.write_text('132.0 33.991 132.009 34.0 10 10\n')
+    if rounding:
+        gridfile.write_text(' '.join(str(float(v) + 1e-13) for v in
+                                     gridfile.read_text().split()) + '\n')
+    before = gridfile.read_text()
     res = run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', str(outdir),
                      '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
-    assert 'WARNING: Existing sltd' in res.stderr
+    assert 'ERROR' not in res.stderr and 'WARNING' not in res.stderr
+    assert gridfile.read_text() == before
+
+
+@pytest.mark.parametrize('stale', ['no_grid_file', 'other_grid', 'no_sltd_dir'])
+def test_step03_stops_on_stale_outputs(stale, geocml_gacos, gacos03, bin_env,
+                                       repo_root, tmp_path):
+    """Existing outputs made by a version before #178 was fixed (no grid
+    file) or on another grid (e.g. before EQA.dem_par was recreated, #174)
+    would be mixed with new ones on the current grid, so step 03 stops,
+    telling to remove them, and touches nothing. Also when only the
+    corrected unw are left, and with glob metacharacters in the path."""
+    outdir = tmp_path / 'GEOCml1[v2]GACOS'
+    shutil.copytree(str(gacos03), str(outdir))
+    sltddir = outdir / 'sltd'
+    gridfile = sltddir / 'sltd_grid.txt'
+    if stale == 'no_grid_file':
+        gridfile.unlink()
+    elif stale == 'other_grid':
+        gridfile.write_text('132.0 33.991 132.009 34.0 10 10\n')
+    else:
+        shutil.rmtree(str(sltddir))
+    before = {p: p.read_bytes() for p in outdir.rglob('*')
+              if p.is_file() and not p.is_symlink()}
+
+    res = subprocess.run(
+        [sys.executable, str(repo_root / 'bin' / 'LiCSBAS03op_GACOS.py'),
+         '-i', 'GEOCml1', '-o', str(outdir), '-g', 'GACOS', '--n_para', '1'],
+        cwd=str(geocml_gacos.workdir), env=bin_env, capture_output=True,
+        text=True, timeout=300)
+
+    assert res.returncode == 1
+    assert 'ERROR: Existing outputs' in res.stderr
     assert 'Remove {}'.format(outdir) in res.stderr
+    assert {p: p.read_bytes() for p in outdir.rglob('*')
+            if p.is_file() and not p.is_symlink()} == before
