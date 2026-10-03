@@ -323,8 +323,11 @@ def _write_geotiff(path, data):
                         str(path), [])
 
 
-def build_geoc(workdir, metadata=True, baselines=True):
-    """Create workdir/GEOC (LiCSAR-like GeoTIFFs) and return its model."""
+def build_geoc(workdir, metadata=True, baselines=True, metadata_freq=True):
+    """Create workdir/GEOC (LiCSAR-like GeoTIFFs) and return its model.
+
+    metadata_freq=False writes metadata.txt without radar_freq (as for the
+    LiCSAR frames that lack it)."""
     geocdir = workdir / 'GEOC'
     geocdir.mkdir()
 
@@ -345,7 +348,8 @@ def build_geoc(workdir, metadata=True, baselines=True):
     if metadata:
         with open(geocdir / 'metadata.txt', 'w') as f:
             print('center_time={}'.format(METADATA_CENTER_TIME), file=f)
-            print('radar_freq={}'.format(METADATA_FREQ), file=f)
+            if metadata_freq:
+                print('radar_freq={}'.format(METADATA_FREQ), file=f)
     if baselines:
         write_baselines(geocdir / 'baselines')
 

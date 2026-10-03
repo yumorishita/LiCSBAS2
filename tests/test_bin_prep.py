@@ -10,6 +10,8 @@ import filecmp
 import os
 import re
 import shutil
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -164,14 +166,82 @@ def test_step02_defaults_without_metadata(geocml1_02_nometa):
     assert np.all(np.abs(bperp) <= 1)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason='#173: the default radar_freq (5.405e9) is assigned '
-                          'after the options are parsed, so --freq is always '
-                          'overwritten')
 def test_step02_freq_option(geocml1_02_freq):
+    """--freq is used when metadata.txt does not exist (#173)."""
     radar_freq = float(par(geocml1_02_freq / 'slc.mli.par',
                            'radar_frequency'))
     assert radar_freq == pytest.approx(1.27e9)
+
+
+def test_step02_freq_option_overrides_metadata(geocml1_02_freq_meta):
+    """--freq wins over radar_freq in metadata.txt, with a warning, while
+    the rest of metadata.txt (center_time) is still used."""
+    outdir, res = geocml1_02_freq_meta
+    mlipar = outdir / 'slc.mli.par'
+    assert float(par(mlipar, 'radar_frequency')) == pytest.approx(1.27e9)
+    assert par(mlipar, 'center_time') == synth.METADATA_CENTER_TIME
+    assert 'WARNING: --freq overrides radar_freq in metadata.txt' in res.stderr
+
+
+@pytest.mark.parametrize('fixture, freq', [
+    ('geocml1_02_meta_nofreq', 5.405e9),         # default
+    ('geocml1_02_meta_nofreq_freq', 1.27e9)])    # --freq
+def test_step02_metadata_without_freq(fixture, freq, request):
+    """metadata.txt without radar_freq: --freq if given, else the default;
+    center_time is read either way."""
+    mlipar = request.getfixturevalue(fixture) / 'slc.mli.par'
+    assert float(par(mlipar, 'radar_frequency')) == pytest.approx(freq)
+    assert par(mlipar, 'center_time') == synth.METADATA_CENTER_TIME
+
+
+@pytest.mark.parametrize('freq', ['1.27', 'abc'])
+def test_step02_freq_invalid(freq, geoc_nometa, bin_env, repo_root, tmp_path):
+    """--freq in GHz or not a number is rejected, not silently used."""
+    res = subprocess.run(
+        [sys.executable, str(repo_root / 'bin' / 'LiCSBAS02_ml_prep.py'),
+         '-i', str(geoc_nometa.geocdir), '-o', str(tmp_path / 'out'),
+         '--freq', freq, '--n_para', '1'],
+        env=bin_env, capture_output=True, text=True, timeout=300)
+    assert res.returncode == 2
+    assert 'ERROR' in res.stderr
+    assert not (tmp_path / 'out' / 'slc.mli.par').exists()
+
+
+def test_step02_rerun_freq_updates_existing_par(geoc, geocml1_02, run_script,
+                                                tmp_path):
+    """Rerunning with --freq into an existing GEOCml fixes radar_frequency
+    of the kept slc.mli.par (the way to recover from #173) and nothing else
+    in it."""
+    outdir = tmp_path / 'GEOCml1'
+    shutil.copytree(str(geocml1_02), str(outdir))
+    lines = (outdir / 'slc.mli.par').read_text().splitlines()
+
+    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-o', str(outdir),
+                     '-n', '1', '--freq', '1.27e9', '--n_para', '1',
+                     cwd=geoc.workdir)
+
+    new = (outdir / 'slc.mli.par').read_text().splitlines()
+    assert float(par(outdir / 'slc.mli.par', 'radar_frequency')) == \
+        pytest.approx(1.27e9)
+    assert [l for l in new if 'radar_frequency' not in l] == \
+        [l for l in lines if 'radar_frequency' not in l]
+    assert 'Update radar_frequency in existing slc.mli.par' in res.stdout
+
+
+def test_step02_rerun_keeps_existing_par_without_freq(
+        geoc_nometa, geocml1_02_freq, run_script, tmp_path):
+    """Without --freq, an existing slc.mli.par whose radar_frequency differs
+    from the default is kept (it may come from an earlier correct --freq),
+    with a warning."""
+    outdir = tmp_path / 'GEOCml1'
+    shutil.copytree(str(geocml1_02_freq), str(outdir))
+    before = (outdir / 'slc.mli.par').read_text()
+
+    res = run_script('LiCSBAS02_ml_prep.py', '-i', 'GEOC', '-o', str(outdir),
+                     '-n', '1', '--n_para', '1', cwd=geoc_nometa.workdir)
+
+    assert (outdir / 'slc.mli.par').read_text() == before
+    assert 'WARNING: Existing slc.mli.par has radar_frequency' in res.stderr
 
 
 def test_step02_rerun_skips_existing(geoc, geocml1_02, run_script, tmp_path):
