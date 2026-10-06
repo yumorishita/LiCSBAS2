@@ -117,6 +117,9 @@ def test_step15_outputs(ts15, geocml):
 
     params = (ts15 / 'info' / '15parameters.txt').read_text()
     assert re.search(r'^- vstd +: not used', params, re.M)
+    # vstd keeps its place in the list, as in the panels of mask_ts.png
+    names = re.findall(r'^- (\S+)', params, re.M)
+    assert names[:4] == ['coh_avg', 'n_unw', 'vstd', 'maxTlen']
 
 
 def test_step15_ignores_vstd_thre_without_vstd(ts15, geocml, run_script):

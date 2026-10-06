@@ -86,6 +86,7 @@ def add_subplot(fig, i, data, vmin, vmax, cmap, title):
     ax.set_title('{0}'.format(title))
     ax.set_xticklabels([])
     ax.set_yticklabels([])
+    return ax
 
 
 #%% Main
@@ -185,13 +186,12 @@ def main(argv=None):
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
 
     ## vstd is calculated only with --vstd in step14
-    vstd_exist = os.path.exists(os.path.join(resultsdir, 'vstd'))
-    if not vstd_exist:
+    names_unused = [] ## Not used for mask and shown as not calculated in png
+    if not os.path.exists(os.path.join(resultsdir, 'vstd')):
         print('\nNo vstd in {} (not calculated in step14). vstd is not used.'.format(os.path.relpath(resultsdir)), flush=True)
         if 'vstd' in thre_dict:
             print('WARNING: -v is ignored. Run LiCSBAS14_vel_std.py with --vstd to use vstd.', file=sys.stderr)
-        i_vstd = names.index('vstd')
-        del names[i_vstd], gt_lt[i_vstd], units[i_vstd]
+        names_unused.append('vstd')
 
 
     ### Get size and ref
@@ -235,6 +235,9 @@ def main(argv=None):
 
     data_dict = {}
     for name in names:
+        if name in names_unused: ## nan only for png
+            data_dict[name] = np.full((length, width), np.nan, dtype=np.float32)
+            continue
         file = os.path.join(resultsdir, name)
         data_dict[name] = io_lib.read_img(file, length, width)
 
@@ -253,6 +256,10 @@ def main(argv=None):
     mskd_rate = []
 
     for i, name in enumerate(names):
+        if name in names_unused:
+            mskd_rate.append(np.nan)
+            continue
+
         _data = data_dict[name][~bool_nan]
         _thre = thre_dict[name]
 
@@ -300,11 +307,12 @@ def main(argv=None):
         print('Noise index    : Threshold  (rate to be masked)')
         print('Noise index    : Threshold  (rate to be masked)', file=f)
         for i, name in enumerate(names):
+            if name in names_unused:
+                print('- {:12s} : not used (not calculated in step14)'.format(name))
+                print('- {:12s} : not used (not calculated in step14)'.format(name), file=f)
+                continue
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]))
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]), file=f)
-        if not vstd_exist:
-            print('- {:12s} : not used (not calculated in step14)'.format('vstd'))
-            print('- {:12s} : not used (not calculated in step14)'.format('vstd'), file=f)
         print('')
         print('', file=f)
         print('Masked pixels  : {}/{} ({:.1f}%)'.format(n_pt_all-n_nomask, n_pt_all, 100-rate_nomask))
@@ -374,8 +382,14 @@ def main(argv=None):
             vmax_n = thre_dict[name]*1.2
 
         title = '{} {}({})'.format(name, units[i], thre_dict[name])
-        add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
-        add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
+        if name in names_unused:
+            title = '{} {}(not used)'.format(name, units[i])
+        ax = add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
+        ax2 = add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
+        if name in names_unused:
+            for _ax in [ax, ax2]:
+                _ax.text(0.5, 0.5, 'Not calculated\nin step14', ha='center',
+                         va='center', transform=_ax.transAxes)
         #i+3 because 3 data already plotted
 
 

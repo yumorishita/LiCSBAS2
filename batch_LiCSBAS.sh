@@ -53,7 +53,6 @@ p12_rm_ifg_list=""	# List file containing ifgs to be manually removed
 p12_rm_noloop_ifg="n"	# y/n. default: n
 p15_coh_thre=""	# default: 0.05
 p15_n_unw_r_thre=""	# default: 1.5
-p15_vstd_thre=""	# default: 100 mm/yr. Used only if p14_vstd="y"
 p15_maxTlen_thre=""	# default: 1 yr
 p15_n_gap_thre=""	# default: 10
 p15_stc_thre=""	# default: 5 mm
@@ -110,6 +109,7 @@ p14_vstd="n"	# y/n. default: n (vstd is not calculated nor used in step15)
 p14_TSdir=""    # default: TS_$GEOCmldir
 p14_mem_size="" # default: 4000 (MB)
 p15_TSdir=""    # default: TS_$GEOCmldir
+p15_vstd_thre=""	# default: 100 mm/yr. Used only if p14_vstd="y"
 p15_vmin=""	# default: auto (mm/yr)
 p15_vmax=""	# default: auto (mm/yr)
 p15_keep_isolated="n"	# y/n. default: n
