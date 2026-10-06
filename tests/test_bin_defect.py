@@ -178,6 +178,7 @@ def test_step14_noise_indices_keep_nodata(ts14d, geocml_defect):
         assert np.all(np.isnan(a[sea])), '{} leaked into nodata'.format(name)
         assert np.all(np.isfinite(a[land])), '{} nan on valid data'.format(name)
         assert np.all(a[land] < 1)  # near-exact linear data -> tiny
+    assert (ts14d / 'results' / 'vstd.png').exists()
 
 
 def test_step15_mask_keeps_nodata_nan(ts15d, geocml_defect):
@@ -193,6 +194,10 @@ def test_step15_mask_keeps_nodata_nan(ts15d, geocml_defect):
                                geocml_defect.length, geocml_defect.width)
     assert np.all(np.isnan(vel_mskd[sea]))
     assert np.any(np.isfinite(vel_mskd[land]))
+
+    # vstd was calculated in step14 (--vstd) and so is used for the mask
+    params = (ts15d / 'info' / '15parameters.txt').read_text()
+    assert re.search(r'^- vstd +: +100 mm/yr', params, re.M)
 
 
 def test_step16_filter_does_not_leak_across_nodata(ts16d, geocml_defect):

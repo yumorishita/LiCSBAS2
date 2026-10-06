@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-This script calculates the standard deviation of the velocity by the bootstrap method and STC (spatio-temporal consistency; Hanssen et al., 2008).
+This script calculates STC (spatio-temporal consistency; Hanssen et al., 2008) and, optionally, the standard deviation of the velocity (vstd) by the bootstrap method.
+
+vstd takes most of the processing time and is calculated from the time series
+before step16 (e.g., before deramping), so it is not calculated by default.
+If not calculated, step15 does not use vstd for the mask.
 
 ===============
 Input & output files
@@ -9,15 +13,17 @@ Inputs in TS_GEOCml*/ :
  - cum.h5 : Cumulative displacement (time-series) in mm
 
 Outputs in TS_GEOCml*/results/ :
- - vstd[.png] : Std of velocity in mm/yr
  - stc[.png]  : Spatio-temporal consistency in mm
+ - vstd[.png] : Std of velocity in mm/yr (only with --vstd. Without --vstd,
+                an existing one is removed so that step15 does not use it)
 
 =====
 Usage
 =====
-LiCSBAS14_vel_std.py -t tsadir [--mem_size float] [--gpu]
+LiCSBAS14_vel_std.py -t tsadir [--vstd] [--mem_size float] [--gpu]
 
  -t  Path to the TS_GEOCml* dir.
+ --vstd       Also calculate vstd (Default: No)
  --mem_size   Max memory size for each patch in MB. (Default: 4000)
  --gpu        Use GPU (Need cupy module)
 
@@ -51,7 +57,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver=1.2; date=20210309; author="Y. Morishita"
+    ver="1.3"; date=20261006; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -60,6 +66,7 @@ def main(argv=None):
     tsadir = []
     memory_size = 4000
     gpu = False
+    vstdflag = False
 
     cmap_noise_r = 'viridis_r'
 
@@ -67,7 +74,7 @@ def main(argv=None):
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:",
-                                       ["help", "mem_size=", "gpu"])
+                                       ["help", "vstd", "mem_size=", "gpu"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -76,6 +83,8 @@ def main(argv=None):
                 return 0
             elif o == '-t':
                 tsadir = a
+            elif o == '--vstd':
+                vstdflag = True
             elif o == '--mem_size':
                 memory_size = float(a)
             elif o == '--gpu':
@@ -100,6 +109,15 @@ def main(argv=None):
     #%% Directory settings
     tsadir = os.path.abspath(tsadir)
     resultsdir = os.path.join(tsadir,'results')
+    stcfile = os.path.join(resultsdir, 'stc')
+    vstdfile = os.path.join(resultsdir, 'vstd')
+
+    ### Remove vstd of a previous run, which step15 would use otherwise
+    if not vstdflag:
+        for file in [vstdfile, vstdfile+'.png']:
+            if os.path.exists(file):
+                print('Remove {} made in a previous run'.format(os.path.relpath(file)))
+                os.remove(file)
 
 
     #%% Read data information
@@ -139,38 +157,35 @@ def main(argv=None):
         del _cum
 
         ### Output data and image
-        stcfile = os.path.join(resultsdir, 'stc')
-
         openmode = 'w' if i == 0 else 'a' #w only 1st patch
         with open(stcfile, openmode) as f:
             stc.tofile(f)
 
 
         #%% Calc vstd
-        ### Read data for vstd
-        n_pt_all = lengththis*width
-        cum_patch = cum[:, rows[0]:rows[1], :].reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
+        if vstdflag:
+            ### Read data for vstd
+            n_pt_all = lengththis*width
+            cum_patch = cum[:, rows[0]:rows[1], :].reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
 
-        ### Remove invalid points
-        bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
+            ### Remove invalid points
+            bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
 
-        cum_patch = cum_patch[bool_unnan_pt, :] ## remain only unnan data
-        n_pt_unnan = bool_unnan_pt.sum()
-        print('  {}/{} points removed due to no data...'.format(n_pt_all-n_pt_unnan, n_pt_all), flush=True)
+            cum_patch = cum_patch[bool_unnan_pt, :] ## remain only unnan data
+            n_pt_unnan = bool_unnan_pt.sum()
+            print('  {}/{} points removed due to no data...'.format(n_pt_all-n_pt_unnan, n_pt_all), flush=True)
 
-        ### Calc vstd by bootstrap
-        vstd = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+            ### Calc vstd by bootstrap
+            vstd = np.zeros((n_pt_all), dtype=np.float32)*np.nan
 
-        print('  Calculating std of velocity by bootstrap...', flush=True)
-        vstd[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
-                                                          gpu=gpu)
+            print('  Calculating std of velocity by bootstrap...', flush=True)
+            vstd[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
+                                                              gpu=gpu)
 
-        ### Output data and image
-        vstdfile = os.path.join(resultsdir, 'vstd')
-
-        openmode = 'w' if i == 0 else 'a' #w only 1st patch
-        with open(vstdfile, openmode) as f:
-                vstd.tofile(f)
+            ### Output data and image
+            openmode = 'w' if i == 0 else 'a' #w only 1st patch
+            with open(vstdfile, openmode) as f:
+                    vstd.tofile(f)
 
 
         #%% Finish patch
@@ -192,12 +207,13 @@ def main(argv=None):
     cmax = np.nanpercentile(stc, 99)
     plot_lib.make_im_png(stc, pngfile, cmap_noise_r, title, cmin, cmax)
 
-    vstd = io_lib.read_img(vstdfile, length, width)
-    pngfile = vstdfile+'.png'
-    title = 'STD of velocity (mm/yr)'
-    cmin = np.nanpercentile(vstd, 1)
-    cmax = np.nanpercentile(vstd, 99)
-    plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
+    if vstdflag:
+        vstd = io_lib.read_img(vstdfile, length, width)
+        pngfile = vstdfile+'.png'
+        title = 'STD of velocity (mm/yr)'
+        cmin = np.nanpercentile(vstd, 1)
+        cmax = np.nanpercentile(vstd, 99)
+        plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
 
 
     #%% Finish

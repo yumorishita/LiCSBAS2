@@ -206,3 +206,5 @@ def test_calc_velstd_withnan():
     assert np.all(np.isfinite(vstd))
     assert np.all(vstd > 0)
     assert np.all(vstd < 5)  # noise 0.5 -> vstd of order 1 mm/yr
+    np.testing.assert_array_equal(vstd,
+                                  inv_lib.calc_velstd_withnan(cum, dt_cum))

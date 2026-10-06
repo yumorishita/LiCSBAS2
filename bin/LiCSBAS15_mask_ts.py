@@ -8,6 +8,7 @@ Input & output files
 Inputs in TS_GEOCml*/ :
  - results/[vel, coh_avg, n_unw, vstd, maxTlen, n_gap, stc,
             n_ifg_noloop, n_loop_err, resid_rms]
+   (vstd only if calculated with --vstd in step14; not used if not exist)
  - info/13parameters.txt
 
 Outputs in TS_GEOCml*/
@@ -30,6 +31,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -u  Threshold of n_unw (number of used unwrap data)
      (Note this value is ratio to the number of images; i.e., 1.5*n_im)
  -v  Threshold of vstd (std of the velocity (mm/yr))
+     (Used only if vstd was calculated with --vstd in step14)
  -T  Threshold of maxTlen (max time length of connected network (year))
  -g  Threshold of n_gap (number of gaps in network)
  -s  Threshold of stc (spatio-temporal consistency (mm))
@@ -94,7 +96,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.8.2"; date=20260408; author="Y. Morishita"
+    ver="1.8.3"; date=20261006; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -181,6 +183,15 @@ def main(argv=None):
     ## lt: more little values than thre are masked (coh_avg, n_unw, maxTlen)
 
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
+
+    ## vstd is calculated only with --vstd in step14
+    vstd_exist = os.path.exists(os.path.join(resultsdir, 'vstd'))
+    if not vstd_exist:
+        print('\nNo vstd in {} (not calculated in step14). vstd is not used.'.format(os.path.relpath(resultsdir)), flush=True)
+        if 'vstd' in thre_dict:
+            print('WARNING: -v is ignored. Run LiCSBAS14_vel_std.py with --vstd to use vstd.', file=sys.stderr)
+        i_vstd = names.index('vstd')
+        del names[i_vstd], gt_lt[i_vstd], units[i_vstd]
 
 
     ### Get size and ref
@@ -291,6 +302,9 @@ def main(argv=None):
         for i, name in enumerate(names):
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]))
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]), file=f)
+        if not vstd_exist:
+            print('- {:12s} : not used (not calculated in step14)'.format('vstd'))
+            print('- {:12s} : not used (not calculated in step14)'.format('vstd'), file=f)
         print('')
         print('', file=f)
         print('Masked pixels  : {}/{} ({:.1f}%)'.format(n_pt_all-n_nomask, n_pt_all, 100-rate_nomask))
