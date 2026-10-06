@@ -112,13 +112,6 @@ def main(argv=None):
     stcfile = os.path.join(resultsdir, 'stc')
     vstdfile = os.path.join(resultsdir, 'vstd')
 
-    ### Remove vstd of a previous run, which step15 would use otherwise
-    if not vstdflag:
-        for file in [vstdfile, vstdfile+'.png']:
-            if os.path.exists(file):
-                print('Remove {} made in a previous run'.format(os.path.relpath(file)))
-                os.remove(file)
-
 
     #%% Read data information
     cumh5 = h5.File(os.path.join(tsadir,'cum.h5'), 'r')
@@ -214,6 +207,12 @@ def main(argv=None):
         cmin = np.nanpercentile(vstd, 1)
         cmax = np.nanpercentile(vstd, 99)
         plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
+    else:
+        ### Remove vstd of a previous run, which step15 would use otherwise
+        for file in [vstdfile, vstdfile+'.png']:
+            if os.path.exists(file):
+                print('Remove {} made in a previous run'.format(os.path.relpath(file)))
+                os.remove(file)
 
 
     #%% Finish

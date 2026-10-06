@@ -125,13 +125,16 @@ def test_step15_ignores_vstd_thre_without_vstd(ts15, geocml, run_script):
     res = run_script('LiCSBAS15_mask_ts.py', '-t', 'TS_GEOCml1', '-v', '100',
                      cwd=geocml.workdir)
     assert '-v is ignored' in res.stderr
+    params = (ts15 / 'info' / '15parameters.txt').read_text()
+    assert re.search(r'^- vstd +: not used', params, re.M)
     np.testing.assert_array_equal(
         io_lib.read_img(mask_file, geocml.length, geocml.width), mask)
 
 
+#%% Step 14 re-run (after the chain, as it rewrites the results dir)
 def test_step14_removes_old_vstd(ts16, geocml, run_script):
-    """Without --vstd, a vstd left by a previous run must be removed so
-    that step15 does not mask with it."""
+    """Without --vstd, a vstd left by a previous run must be removed
+    because step15 would use it otherwise."""
     resultsdir = ts16 / 'results'
     np.full((geocml.length, geocml.width), 1000,
             dtype=np.float32).tofile(str(resultsdir / 'vstd'))
