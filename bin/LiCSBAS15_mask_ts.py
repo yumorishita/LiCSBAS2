@@ -8,6 +8,7 @@ Input & output files
 Inputs in TS_GEOCml*/ :
  - results/[vel, coh_avg, n_unw, vstd, maxTlen, n_gap, stc,
             n_ifg_noloop, n_loop_err, resid_rms]
+   (vstd only if calculated with --vstd in step14; not used if not exist)
  - info/13parameters.txt
 
 Outputs in TS_GEOCml*/
@@ -30,6 +31,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -u  Threshold of n_unw (number of used unwrap data)
      (Note this value is ratio to the number of images; i.e., 1.5*n_im)
  -v  Threshold of vstd (std of the velocity (mm/yr))
+     (Used only if vstd was calculated with --vstd in step14)
  -T  Threshold of maxTlen (max time length of connected network (year))
  -g  Threshold of n_gap (number of gaps in network)
  -s  Threshold of stc (spatio-temporal consistency (mm))
@@ -84,6 +86,7 @@ def add_subplot(fig, i, data, vmin, vmax, cmap, title):
     ax.set_title('{0}'.format(title))
     ax.set_xticklabels([])
     ax.set_yticklabels([])
+    return ax
 
 
 #%% Main
@@ -94,7 +97,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.8.2"; date=20260408; author="Y. Morishita"
+    ver="1.8.3"; date=20261006; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -182,6 +185,14 @@ def main(argv=None):
 
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
 
+    ## vstd is calculated only with --vstd in step14
+    names_unused = [] ## Not used for mask and shown as not calculated in png
+    if not os.path.exists(os.path.join(resultsdir, 'vstd')):
+        print('\nNo vstd in {} (not calculated in step14). vstd is not used.'.format(os.path.relpath(resultsdir)), flush=True)
+        if 'vstd' in thre_dict:
+            print('WARNING: -v is ignored. Run LiCSBAS14_vel_std.py with --vstd to use vstd.', file=sys.stderr)
+        names_unused.append('vstd')
+
 
     ### Get size and ref
     width = int(io_lib.get_param_par(inparmfile, 'range_samples'))
@@ -224,6 +235,9 @@ def main(argv=None):
 
     data_dict = {}
     for name in names:
+        if name in names_unused: ## nan only for png
+            data_dict[name] = np.full((length, width), np.nan, dtype=np.float32)
+            continue
         file = os.path.join(resultsdir, name)
         data_dict[name] = io_lib.read_img(file, length, width)
 
@@ -242,6 +256,10 @@ def main(argv=None):
     mskd_rate = []
 
     for i, name in enumerate(names):
+        if name in names_unused:
+            mskd_rate.append(np.nan)
+            continue
+
         _data = data_dict[name][~bool_nan]
         _thre = thre_dict[name]
 
@@ -289,6 +307,10 @@ def main(argv=None):
         print('Noise index    : Threshold  (rate to be masked)')
         print('Noise index    : Threshold  (rate to be masked)', file=f)
         for i, name in enumerate(names):
+            if name in names_unused:
+                print('- {:12s} : not used (not calculated in step14)'.format(name))
+                print('- {:12s} : not used (not calculated in step14)'.format(name), file=f)
+                continue
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]))
             print('- {:12s} : {:4} {:5} ({:4.1f}%)'.format(name, thre_dict[name], units[i], mskd_rate[i]), file=f)
         print('')
@@ -360,8 +382,14 @@ def main(argv=None):
             vmax_n = thre_dict[name]*1.2
 
         title = '{} {}({})'.format(name, units[i], thre_dict[name])
-        add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
-        add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
+        if name in names_unused:
+            title = '{} {}(not used)'.format(name, units[i])
+        ax = add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
+        ax2 = add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
+        if name in names_unused:
+            for _ax in [ax, ax2]:
+                _ax.text(0.5, 0.5, 'Not calculated\nin step14', ha='center',
+                         va='center', transform=_ax.transAxes)
         #i+3 because 3 data already plotted
 
 

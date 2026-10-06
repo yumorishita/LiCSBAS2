@@ -90,13 +90,12 @@ def test_step13_ref(ts13):
     assert re.match(r'^\d+:\d+/\d+:\d+$', ref)
 
 
-#%% Step 14: velocity std
+#%% Step 14: velocity std (vstd is calculated only with --vstd, which is
+#   tested in test_bin_defect.py)
 def test_step14_outputs(ts14, geocml):
     resultsdir = ts14 / 'results'
-    vstd = io_lib.read_img(str(resultsdir / 'vstd'),
-                           geocml.length, geocml.width)
-    assert np.all(np.isfinite(vstd))
-    assert np.all(vstd < 1)  # exact linear data -> tiny bootstrap std
+    assert not (resultsdir / 'vstd').exists()
+    assert not (resultsdir / 'vstd.png').exists()
 
     stc = io_lib.read_img(str(resultsdir / 'stc'),
                           geocml.length, geocml.width)
@@ -115,6 +114,37 @@ def test_step15_outputs(ts15, geocml):
     vel_mskd = io_lib.read_img(str(resultsdir / 'vel.mskd'),
                                geocml.length, geocml.width)
     assert np.any(np.isfinite(vel_mskd))
+
+    params = (ts15 / 'info' / '15parameters.txt').read_text()
+    assert re.search(r'^- vstd +: not used', params, re.M)
+    # vstd keeps its place in the list, as in the panels of mask_ts.png
+    names = re.findall(r'^- (\S+)', params, re.M)
+    assert names[:4] == ['coh_avg', 'n_unw', 'vstd', 'maxTlen']
+
+
+def test_step15_ignores_vstd_thre_without_vstd(ts15, geocml, run_script):
+    mask_file = str(ts15 / 'results' / 'mask')
+    mask = io_lib.read_img(mask_file, geocml.length, geocml.width)
+    res = run_script('LiCSBAS15_mask_ts.py', '-t', 'TS_GEOCml1', '-v', '100',
+                     cwd=geocml.workdir)
+    assert '-v is ignored' in res.stderr
+    params = (ts15 / 'info' / '15parameters.txt').read_text()
+    assert re.search(r'^- vstd +: not used', params, re.M)
+    np.testing.assert_array_equal(
+        io_lib.read_img(mask_file, geocml.length, geocml.width), mask)
+
+
+#%% Step 14 re-run (after the chain, as it rewrites the results dir)
+def test_step14_removes_old_vstd(ts16, geocml, run_script):
+    """Without --vstd, a vstd left by a previous run must be removed
+    because step15 would use it otherwise."""
+    resultsdir = ts16 / 'results'
+    np.full((geocml.length, geocml.width), 1000,
+            dtype=np.float32).tofile(str(resultsdir / 'vstd'))
+    (resultsdir / 'vstd.png').write_bytes(b'')
+    run_script('LiCSBAS14_vel_std.py', '-t', 'TS_GEOCml1', cwd=geocml.workdir)
+    assert not (resultsdir / 'vstd').exists()
+    assert not (resultsdir / 'vstd.png').exists()
 
 
 #%% Step 16: filter

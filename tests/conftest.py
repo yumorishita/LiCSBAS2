@@ -91,6 +91,7 @@ def ts13(ts12, geocml, run_script):
 
 @pytest.fixture(scope='session')
 def ts14(ts13, geocml, run_script):
+    # Default (no --vstd): steps 15-16 run without vstd in this chain
     run_script('LiCSBAS14_vel_std.py', '-t', 'TS_GEOCml1', cwd=geocml.workdir)
     return ts13
 
@@ -144,7 +145,8 @@ def ts13d(ts12d, geocml_defect, run_script):
 
 @pytest.fixture(scope='session')
 def ts14d(ts13d, geocml_defect, run_script):
-    run_script('LiCSBAS14_vel_std.py', '-t', 'TS_GEOCml1',
+    # With --vstd: steps 15-16 run with vstd in this chain
+    run_script('LiCSBAS14_vel_std.py', '-t', 'TS_GEOCml1', '--vstd',
                cwd=geocml_defect.workdir)
     return ts13d
 

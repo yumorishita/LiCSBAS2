@@ -27,11 +27,13 @@ also acts as an early warning when a new upstream release breaks LiCSBAS.
 - `test_bin_smoke.py` (marker `smoke`) — runs steps 11–16 and
   `LiCSBAS_cum2vel.py` as subprocesses on a synthetic 10x10-pixel,
   5-epoch dataset with a known velocity field, and checks the inverted
-  velocity against the truth.
+  velocity against the truth. Step 14 runs without `--vstd` (the
+  default), so steps 15–16 run without vstd.
 - `test_bin_defect.py` (marker `smoke`) — runs steps 11–16 on a dataset
   with defects (nodata, low coverage/coherence ifgs, an isolated epoch, a
   2pi unwrapping error) and checks that exactly the bad ifgs are rejected,
-  nodata stays nan and the velocity still matches the truth.
+  nodata stays nan and the velocity still matches the truth. Step 14
+  runs with `--vstd`.
 - `test_bin_prep.py` (marker `smoke`) — runs steps 02 (GeoTIFF ->
   GEOCml, with and without multilooking), 03 (GACOS), 04 (mask) and 05
   (clip) and checks their outputs value by value.
