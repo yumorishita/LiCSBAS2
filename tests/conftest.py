@@ -282,3 +282,26 @@ def clip05_geo(geocml_prep, run_script):
                '-o', 'GEOCml1clipg', '-g', '132.001/132.006/33.991/33.999',
                '--n_para', '1', cwd=geocml_prep.workdir)
     return geocml_prep.workdir / 'GEOCml1clipg'
+
+
+# --- Step 03 (GACOS) ---
+
+@pytest.fixture(scope='session')
+def geocml_gacos(tmp_path_factory):
+    """GEOCml1 with U.geo and GACOS sltd. See synth.build_geocml_gacos."""
+    return synth.build_geocml_gacos(tmp_path_factory.mktemp('licsbas_gacos'))
+
+
+@pytest.fixture(scope='session')
+def gacos03(geocml_gacos, run_script):
+    run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', 'GEOCml1GACOS',
+               '-g', 'GACOS', '--n_para', '1', cwd=geocml_gacos.workdir)
+    return geocml_gacos.workdir / 'GEOCml1GACOS'
+
+
+@pytest.fixture(scope='session')
+def gacos03_ztd(geocml_gacos, run_script):
+    """Step 03 from ztd.tif (m) instead of sltd.geo.tif (rad)."""
+    run_script('LiCSBAS03op_GACOS.py', '-i', 'GEOCml1', '-o', 'GEOCml1GACOSztd',
+               '-g', 'GACOS_ztd', '--n_para', '1', cwd=geocml_gacos.workdir)
+    return geocml_gacos.workdir / 'GEOCml1GACOSztd'
