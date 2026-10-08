@@ -22,6 +22,8 @@ Outputs in TS_GEOCml*/ :
  - 12loop/
    - loop_info.txt : Statistical information of loop phase closure
    - bad_ifg_*.txt : List of bad ifgs identified by loop closure
+   - rm_ifg_man.txt   : List of ifgs manually removed (--rm_ifg_list)
+   - keep_ifg_man.txt : List of ifgs manually kept (--keep_ifg_list)
    - good_loop_png/*.png : png images of good loop phase closure
    - bad_loop_png/*.png  : png images of bad loop phase closure
    - bad_loop_cand_png/*.png : png images of bad loop candidates in which
