@@ -22,6 +22,8 @@ Outputs in TS_GEOCml*/ :
  - 12loop/
    - loop_info.txt : Statistical information of loop phase closure
    - bad_ifg_*.txt : List of bad ifgs identified by loop closure
+   - rm_ifg_man.txt   : List of ifgs manually removed (--rm_ifg_list)
+   - keep_ifg_man.txt : List of ifgs manually kept (--keep_ifg_list)
    - good_loop_png/*.png : png images of good loop phase closure
    - bad_loop_png/*.png  : png images of bad loop phase closure
    - bad_loop_cand_png/*.png : png images of bad loop candidates in which
@@ -49,13 +51,17 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
- [--rm_ifg_list file] [--rm_noloop_ifg] [--n_para int]
+ [--rm_ifg_list file] [--keep_ifg_list file] [--rm_noloop_ifg] [--n_para int]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
  -l  Threshold of RMS of loop phase (Default: 1.5 rad)
  --multi_prime  Multi Prime mode (take into account bias in loop)
  --rm_ifg_list  Manually remove ifgs listed in a file
+ --keep_ifg_list  Manually keep ifgs listed in a file even if identified as bad
+                  by loop closure or removed by --rm_noloop_ifg
+                  (e.g., 2 good ifgs in a single loop with a bad ifg).
+                  Ifgs with no data at the ref point are still removed.
  --rm_noloop_ifg  Remove ifgs with no loop
  --n_para  Number of parallel processing (Default: # of usable CPU-1)
 
@@ -91,7 +97,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.7"; date=20260929; author="Y. Morishita"
+    ver="1.6.8"; date=20261008; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -104,6 +110,7 @@ def main(argv=None):
     loop_thre = 1.5
     multi_prime = False
     rm_ifg_list = []
+    keep_ifg_list = []
     rm_noloop_ifg = False
     skip_if_noloop = False
 
@@ -119,7 +126,7 @@ def main(argv=None):
         try:
             opts, args = getopt.getopt(argv[1:], "hd:t:l:",
                                        ["help", "multi_prime", "rm_ifg_list=",
-                                        "rm_noloop_ifg", "skip_if_noloop", "n_para="])
+                                        "keep_ifg_list=", "rm_noloop_ifg", "skip_if_noloop", "n_para="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -136,6 +143,8 @@ def main(argv=None):
                 multi_prime = True
             elif o == '--rm_ifg_list':
                 rm_ifg_list = a
+            elif o == '--keep_ifg_list':
+                keep_ifg_list = a
             elif o == '--rm_noloop_ifg':
                 rm_noloop_ifg = True
             elif o == '--skip_if_noloop':
@@ -151,6 +160,14 @@ def main(argv=None):
                 raise Usage('No slc.mli.par file exists in {}!'.format(ifgdir))
         if rm_ifg_list and not os.path.exists(rm_ifg_list):
             raise Usage('No {} exists!'.format(rm_ifg_list))
+        if keep_ifg_list and not os.path.exists(keep_ifg_list):
+            raise Usage('No {} exists!'.format(keep_ifg_list))
+        if rm_ifg_list and keep_ifg_list:
+            rm_keep_ifg = sorted(set(io_lib.read_ifg_list(rm_ifg_list)) &
+                                 set(io_lib.read_ifg_list(keep_ifg_list)))
+            if rm_keep_ifg:
+                raise Usage('{} in both {} and {}!'.format(
+                    ' '.join(rm_keep_ifg), rm_ifg_list, keep_ifg_list))
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -366,6 +383,25 @@ def main(argv=None):
     if rm_noloop_ifg:
         bad_ifg = list(set(bad_ifg+no_loop_ifg))
 
+    ### Keep manually indicated ifg
+    if keep_ifg_list:
+        keep_ifg = io_lib.read_ifg_list(keep_ifg_list)
+        bad_ifg = list(set(bad_ifg)-set(keep_ifg))
+        bad_ifg1 = list(set(bad_ifg1)-set(keep_ifg)) # for loop_info.txt
+
+        keep_ifgfile = os.path.join(loopdir, 'keep_ifg_man.txt')
+        print("\nFollowing ifgs are manually kept by {}:".format(
+            keep_ifg_list), flush=True)
+        with open(keep_ifgfile, 'w') as f:
+            for i in keep_ifg:
+                print('{}'.format(i), file=f)
+                if i in ifgdates:
+                    print('{}'.format(i), flush=True)
+                else:
+                    print('{} (not used because removed in step11 or not exist)'.format(i), flush=True)
+    else:
+        keep_ifg = []
+
     ### Compute n_unw without bad_ifg11 and bad_ifg
     n_unw = np.zeros((length, width), dtype=np.int16)
     for ifgd in ifgdates:
@@ -443,6 +479,8 @@ def main(argv=None):
         unw_ref[unw_ref == 0] = np.nan # Fill 0 with nan
         if np.all(np.isnan(unw_ref)):
             noref_ifg.append(ifgd)
+            if ifgd in keep_ifg:
+                print('\n{} is removed even though manually kept because no data at the ref point.'.format(ifgd), flush=True)
 
     bad_ifgfile = os.path.join(loopdir, 'bad_ifg_noref.txt')
     with open(bad_ifgfile, 'w') as f:
@@ -486,6 +524,8 @@ def main(argv=None):
     with open(bad_ifgfile, 'w') as f:
         for i in bad_ifg2:
             print('{}'.format(i), file=f)
+
+    bad_ifg2 = list(set(bad_ifg2)-set(keep_ifg))
 
 
     #%% Output all bad ifg list and identify remaining candidate of bad ifgs
@@ -543,6 +583,9 @@ def main(argv=None):
     if rm_ifg_list:
         print('# +: Removed by manually indicating in {}'.format(rm_ifg_list),
               file=f)
+    if keep_ifg_list:
+        print('# Ifgs manually kept by {} are not regarded as removed'.format(
+            keep_ifg_list), file=f)
     print('# /: Candidates of bad loops but causative ifgs unidentified',
           file=f)
     print('# image1   image2   image3 RMS w/oref  w/ref', file=f)

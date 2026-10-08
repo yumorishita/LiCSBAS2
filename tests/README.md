@@ -34,12 +34,17 @@ also acts as an early warning when a new upstream release breaks LiCSBAS.
   2pi unwrapping error) and checks that exactly the bad ifgs are rejected,
   nodata stays nan and the velocity still matches the truth. Step 14
   runs with `--vstd`.
+- `test_bin_keep_ifg.py` (marker `smoke`) — runs step 12 with
+  `--keep_ifg_list` on a dataset whose one unclosed loop also takes a
+  good ifg and the first epoch with it, and checks that the kept ifgs
+  stay (also through the check with the ref point) and step 13 keeps
+  the epoch.
 - `test_bin_prep.py` (marker `smoke`) — runs steps 02 (GeoTIFF ->
   GEOCml, with and without multilooking), 03 (GACOS), 04 (mask) and 05
   (clip) and checks their outputs value by value.
 - `synth.py` — builders of the synthetic datasets: GEOCml (clean and
-  defective), GEOC GeoTIFFs for step 02, GACOS sltd for step 03, and
-  GEOCml for steps 04/05.
+  defective), GEOC GeoTIFFs for step 02, GACOS sltd for step 03,
+  GEOCml for steps 04/05, and GEOCml for `--keep_ifg_list` of step 12.
 
 ## Known bugs pinned with xfail
 
