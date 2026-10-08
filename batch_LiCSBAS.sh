@@ -50,6 +50,7 @@ p11_coh_thre=""	# default: 0.05
 p12_loop_thre=""	# default: 1.5 rad
 p12_multi_prime="y"	# y/n. y recommended
 p12_rm_ifg_list=""	# List file containing ifgs to be manually removed
+p12_keep_ifg_list=""	# List file containing ifgs to be manually kept
 p12_rm_noloop_ifg="n"	# y/n. default: n
 p15_coh_thre=""	# default: 0.05
 p15_n_unw_r_thre=""	# default: 1.5
@@ -284,6 +285,7 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
   if [ ! -z $p12_loop_thre ];then p12_op="$p12_op -l $p12_loop_thre"; fi
   if [ $p12_multi_prime == "y" ];then p12_op="$p12_op --multi_prime"; fi
   if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
+  if [ ! -z $p12_keep_ifg_list ];then p12_op="$p12_op --keep_ifg_list $p12_keep_ifg_list"; fi
   if [ $p12_rm_noloop_ifg == "y" ];then p12_op="$p12_op --rm_noloop_ifg"; fi
   if [ $p12_skip_if_noloop == "y" ];then p12_op="$p12_op --skip_if_noloop"; fi
   if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";

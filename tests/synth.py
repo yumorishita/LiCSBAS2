@@ -226,6 +226,30 @@ def build_geocml_defect(workdir):
         wavelength=WAVELENGTH, coef_r2m=COEF_R2M)
 
 
+#%% Dataset for --keep_ifg_list of step 12 (#119)
+# The clean dataset with a 2pi unwrapping error in KEEP_ERR_IFG (0_2). Its
+# three loops are
+#   (0_1, 1_2, 0_2)  (1_2, 2_3, 1_3)  (2_3, 3_4, 2_4)
+# so only the first one fails. 1_2 is saved by the second loop, but
+# KEEP_GOOD_IFG (0_1) is in no other loop and is removed with KEEP_ERR_IFG
+# although it is good; the first epoch then drops out of the time series.
+
+KEEP_GOOD_IFG = '{}_{}'.format(IMDATES[0], IMDATES[1])
+KEEP_ERR_IFG = '{}_{}'.format(IMDATES[0], IMDATES[2])
+
+
+def build_geocml_keep(workdir):
+    """Create workdir/GEOCml1 with an unwrapping error in KEEP_ERR_IFG."""
+    truth = build_geocml(workdir)
+
+    unwfile = truth.geocdir / KEEP_ERR_IFG / (KEEP_ERR_IFG + '.unw')
+    unw = np.fromfile(str(unwfile), dtype=np.float32).reshape(LENGTH, WIDTH)
+    unw[:, :LOOP_ERR_COLS] += np.float32(2 * np.pi)
+    write_img(unwfile, unw)
+
+    return truth
+
+
 #%% GEOC dataset: GeoTIFF input of step 02
 # 2x the size of the GEOCml dataset, so that multilooking by NLOOK must give
 # back exactly unw_phase(). Each 2x2 block holds its GEOCml value plus a
