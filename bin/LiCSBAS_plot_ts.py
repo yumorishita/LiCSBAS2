@@ -114,7 +114,7 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
 if __name__ == "__main__":
     argv = sys.argv
 
-    ver="1.14.5"; date=20260902; author="Y. Morishita"
+    ver="1.14.6"; date=20261028; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -303,9 +303,13 @@ if __name__ == "__main__":
                 deramp = deramp+', hgt-linear'
 
         filtwidth_km = float(cumh5['filtwidth_km'][()])
-        filtwidth_yr = float(cumh5['filtwidth_yr'][()])
-        filtwidth_day = int(np.round(filtwidth_yr*365.25))
-        label1 = '1: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km, filtwidth_yr, filtwidth_day, deramp)
+        if 'n_lsq_t' in list(cumh5.keys()):
+            filt_t = 'lsq{}'.format(int(cumh5['n_lsq_t'][()]))
+        else:
+            filtwidth_yr = float(cumh5['filtwidth_yr'][()])
+            filtwidth_day = int(np.round(filtwidth_yr*365.25))
+            filt_t = '{:.2f}yr ({}d)'.format(filtwidth_yr, filtwidth_day)
+        label1 = '1: s={:.1f}km, t={}{}'.format(filtwidth_km, filt_t, deramp)
     else:
         label1 = '1: No filter'
 
@@ -338,9 +342,13 @@ if __name__ == "__main__":
             else:
                 deramp2 = ', drmp={}'.format(deramp_flag2)
             filtwidth_km2 = float(cumh52['filtwidth_km'][()])
-            filtwidth_yr2 = float(cumh52['filtwidth_yr'][()])
-            filtwidth_day2 = int(np.round(filtwidth_yr2*365.25))
-            label2 = '2: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km2, filtwidth_yr2, filtwidth_day2, deramp2)
+            if 'n_lsq_t' in list(cumh52.keys()):
+                filt_t2 = 'lsq{}'.format(int(cumh52['n_lsq_t'][()]))
+            else:
+                filtwidth_yr2 = float(cumh52['filtwidth_yr'][()])
+                filtwidth_day2 = int(np.round(filtwidth_yr2*365.25))
+                filt_t2 = '{:.2f}yr ({}d)'.format(filtwidth_yr2, filtwidth_day2)
+            label2 = '2: s={:.1f}km, t={}{}'.format(filtwidth_km2, filt_t2, deramp2)
         else:
             label2 = '2: No filter'
 
