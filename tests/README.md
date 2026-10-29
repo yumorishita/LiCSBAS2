@@ -29,8 +29,8 @@ also acts as an early warning when a new upstream release breaks LiCSBAS.
   5-epoch dataset with a known velocity field, and checks the inverted
   velocity against the truth. Step 14 runs without `--vstd` (the
   default), so steps 15–16 run without vstd. Step 16 also runs on copies
-  with `--n_lsq_t 3`, which must leave the linear time series unchanged,
-  and with `-y auto` (gaussian filter in time).
+  with `--n_lsq_t 3` on the data plus a nonlinear signal, whose HP in time
+  must match `np.polyfit`, and with `-y auto` (gaussian filter in time).
 - `test_bin_defect.py` (marker `smoke`) — runs steps 11–16 on a dataset
   with defects (nodata, low coverage/coherence ifgs, an isolated epoch, a
   2pi unwrapping error) and checks that exactly the bad ifgs are rejected,

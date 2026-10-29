@@ -49,6 +49,8 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km]
               similarly regardless of the time intervals, e.g., an epoch
               isolated by long gaps is also filtered. Near both ends, the
               epochs are shifted inward (i.e., the fit is extrapolated).
+              An odd number is recommended; an even number uses one more
+              epoch before than after.
  -y  Use gaussian filter in time with this width in yr instead of the linear
      fit. 'auto' for avg_interval*3 (default until ver1.6.4), 0 for no
      temporal filter.
@@ -812,7 +814,8 @@ def filter_wrapper(i):
         del cum_win
 
         ## a = (s2*y0-s1*y1)/det. det is 0 if <2 valid data, where y0 is
-        ## the only valid data (i.e., no temporal filter) or 0.
+        ## the only valid data or 0. With <3 valid data, the line passes all
+        ## of them, i.e., no temporal filter.
         det = s0*s2-s1**2
         cum_lpt = np.divide(s2*y0-s1*y1, det, out=y0, where=det>0)
 
