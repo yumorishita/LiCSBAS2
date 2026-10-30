@@ -116,7 +116,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.0"; date=20261028; author="Y. Morishita"
+    ver="1.7.1"; date=20261030; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -565,7 +565,7 @@ def main(argv=None):
 
     ### Rerferencing cumulative displacement to new stable ref
     for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - cum[i, refy1s, refx1s]
+        cum_filt[i, :, :] = cum_filt[i, :, :] - cum_filt[i, refy1s, refx1s]
     del cum
 
     ### Save image

@@ -169,6 +169,15 @@ def test_step16_outputs(ts16, geocml):
     assert (ts16 / 'info' / '16parameters.txt').exists()
 
 
+def nonlinear_signal(geocml):
+    """Signal g (mm) nonlinear in any 3 epochs, of amplitude w (1-2) in
+    each pixel, to be added to the linear synthetic data."""
+    g = np.array([0., 4., -3., 5., 1.])
+    x, y = np.meshgrid(np.arange(geocml.width), np.arange(geocml.length))
+    w = 1 + (x + y) / 18
+    return g, w
+
+
 def run16_copy(ts16, geocml, run_script, tsname, *args, add_cum=None):
     """Run step 16 on a copy of the TS dir so that ts16 is not overwritten.
     add_cum (n_im x length x width) is added to cum.h5 of the copy."""
@@ -190,9 +199,7 @@ def test_step16_lsq_hp_in_time(ts16, geocml, run_script):
     from that fit (HP in time), and leave the linear part unchanged."""
     n = 3
     t = synth.dt_cum_years()
-    g = np.array([0., 4., -3., 5., 1.])  # mm, nonlinear in any 3 epochs
-    x, y = np.meshgrid(np.arange(geocml.width), np.arange(geocml.length))
-    w = 1 + (x + y) / 18  # amplitude of g in each pixel, 1-2
+    g, w = nonlinear_signal(geocml)
 
     hp = np.zeros_like(g)  # HP in time of g
     for i in range(len(t)):
@@ -250,6 +257,25 @@ def test_step16_n_lsq_t_and_y(ts15, geocml, bin_env, repo_root):
         timeout=300)
     assert res.returncode == 2
     assert 'Both -y and --n_lsq_t' in res.stderr
+
+
+def test_step16_zero_at_ref(ts16, geocml, run_script):
+    """The filtered time series and velocity are referenced to the stable
+    ref point of step 16 (16ref.txt), so they are 0 there. The nonlinear
+    signal makes the filter phase at the ref point far from 0."""
+    g, w = nonlinear_signal(geocml)
+    tsdir = run16_copy(ts16, geocml, run_script, 'TS_GEOCml1_ref',
+                       add_cum=g[:, None, None] * w)
+
+    ref = (tsdir / 'info' / '16ref.txt').read_text().strip()
+    x1, x2, y1, y2 = [int(s) for s in re.split('[:/]', ref)]
+    with h5py.File(str(tsdir / 'cum_filt.h5'), 'r') as f:
+        cum_filt = f['cum'][()]
+    np.testing.assert_array_equal(cum_filt[:, y1:y2, x1:x2], 0)
+
+    vel_filt = io_lib.read_img(str(tsdir / 'results' / 'vel.filt'),
+                               geocml.length, geocml.width)
+    np.testing.assert_allclose(vel_filt[y1:y2, x1:x2], 0, atol=1e-6)
 
 
 #%% Downstream tool: cum2vel
