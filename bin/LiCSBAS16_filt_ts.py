@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This script applies spatio-temporal filter (HP in time and LP in space with gaussian kernel, same as StaMPS) to the time series of displacement. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 1-3.
+This script applies spatio-temporal filter (HP in time and LP in space) to the time series of displacement. LP in time is a linear least squares fit to a fixed number of epochs around each epoch, which works similarly regardless of the time intervals, or a gaussian kernel (same as StaMPS) if -y option is used. LP in space uses a gaussian kernel. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 1-3.
 
 ===============
 Input & output files
@@ -35,14 +35,25 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
+LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km]
+ [--n_lsq_t int | -y filtwidth_yr] [-r deg]
  [--hgt_linear] [--hgt_min int] [--hgt_max int] [--nomask] [--n_para int]
  [--range x1:x2/y1:y2 | --range_geo lon1/lon2/lat1/lat2]
  [--ex_range x1:x2/y1:y2 | --ex_range_geo lon1/lon2/lat1/lat2]
 
  -t  Path to the TS_GEOCml* dir.
  -s  Width of spatial filter in km (Default: 2 km)
- -y  Width of temporal filter in yr (Default: auto, avg_interval*3)
+ --n_lsq_t    Number of epochs for LP in time (>=3, Default: 9)
+              LP in time is the value at each epoch of a linear fit (least
+              squares) to the epochs around it. Unlike -y, the filter works
+              similarly regardless of the time intervals, e.g., an epoch
+              isolated by long gaps is also filtered. Near both ends, the
+              epochs are shifted inward (i.e., the fit is extrapolated).
+              An odd number is recommended; an even number uses one more
+              epoch before than after.
+ -y  Use gaussian filter in time with this width in yr instead of the linear
+     fit. 'auto' for avg_interval*3 (default until ver1.6.4), 0 for no
+     temporal filter.
  -r  Degree of deramp [1, bl, 2] (Default: no deramp)
      1: 1d ramp, bl: bilinear, 2: 2d polynomial
  --demerr     Estimate and remove DEM error phase
@@ -105,21 +116,23 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.6.4"; date=20260818; author="Y. Morishita"
+    ver="1.7.0"; date=20261028; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
     ## for parallel processing
     global cum, mask, deg_ramp, hgt_linearflag, hgt, hgt_min, hgt_max,\
     filtcumdir, filtincdir, imdates, cycle, coef_r2m, models, \
-    filtwidth_yr, filtwidth_km, dt_cum, x_stddev, y_stddev, mask2, cmap_wrap
+    filtwidth_yr, filtwidth_km, dt_cum, x_stddev, y_stddev, mask2, cmap_wrap, \
+    lsq_tflag, n_lsq_t
     global cum_org, cum_filt
 
 
     #%% Set default
     tsadir = []
     filtwidth_km = 2
-    filtwidth_yr = []
+    filtwidth_yr = [] ## Not given: linear fit in time
+    n_lsq_t = []
     deg_ramp = []
     demerrflag = False
     hgt_linearflag = False
@@ -146,7 +159,8 @@ def main(argv=None):
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
-                           ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
+                           ["help", "n_lsq_t=", "demerr",
+                            "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "n_para=", "range=", "range_geo=",
                             "ex_range=", "ex_range_geo="])
         except getopt.error as msg:
@@ -160,7 +174,9 @@ def main(argv=None):
             elif o == '-s':
                 filtwidth_km = float(a)
             elif o == '-y':
-                filtwidth_yr = float(a)
+                filtwidth_yr = a if a == 'auto' else float(a)
+            elif o == '--n_lsq_t':
+                n_lsq_t = int(a)
             elif o == '-r':
                 deg_ramp = a
             elif o == '--demerr':
@@ -194,6 +210,10 @@ def main(argv=None):
             raise Usage('Both --range and --range_geo given, use either one not both!')
         if ex_range_str and ex_range_geo_str:
             raise Usage('Both --ex_range and --ex_range_geo given, use either one not both!')
+        if filtwidth_yr != [] and n_lsq_t != []:
+            raise Usage('Both -y and --n_lsq_t given, use either one not both!')
+        if n_lsq_t != [] and n_lsq_t < 3:
+            raise Usage('--n_lsq_t must be 3 or larger!')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -275,8 +295,17 @@ def main(argv=None):
     else: ## not geocoded
         print('No latlon field found in {}. Skip.'.format(cumname))
 
-    ### temporal filter width
-    if not filtwidth_yr and filtwidth_yr != 0:
+    ### temporal filter
+    lsq_tflag = filtwidth_yr == []
+    if lsq_tflag:
+        filtwidth_yr = np.nan ## not used
+        if n_lsq_t == []:
+            n_lsq_t = 9
+        if n_lsq_t > n_im:
+            print('n_lsq_t ({}) is larger than the number of images. Set '
+                  'to {}.'.format(n_lsq_t, n_im))
+            n_lsq_t = n_im
+    elif filtwidth_yr == 'auto':
         filtwidth_yr = dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ### Approx memory use per worker (MB). n_para is capped by
@@ -290,7 +319,9 @@ def main(argv=None):
     ###  - LP in space: astropy pads the frame by the kernel size (8*stddev)
     ###    and keeps ~10 complex128 arrays of that padded size alive at once,
     ###    i.e. memory grows rapidly with filtwidth_km
-    if filtwidth_yr:
+    if lsq_tflag:
+        n_im_t = n_lsq_t
+    elif filtwidth_yr:
         n_im_t = int((np.abs(dt_cum-dt_cum[:, None]) <
                       filtwidth_yr*4).sum(axis=1).max())
     else:
@@ -370,7 +401,10 @@ def main(argv=None):
     print('Size of image (w,l)      : {0}, {1}'.format(width, length))
     print('Number of images         : {}'.format(n_im))
     print('Width of filter in space : {} km ({:.1f}x{:.1f} pixel)'.format(filtwidth_km, x_stddev, y_stddev))
-    print('Width of filter in time  : {:.3f} yr ({} days)'.format(filtwidth_yr, int(filtwidth_yr*365.25)))
+    if lsq_tflag:
+        print('Filter in time           : linear fit to {} epochs'.format(n_lsq_t))
+    else:
+        print('Width of filter in time  : {:.3f} yr ({} days)'.format(filtwidth_yr, int(filtwidth_yr*365.25)))
     print('Deramp flag              : {}'.format(deg_ramp), flush=True)
     print('hgt-linear flag          : {}'.format(hgt_linearflag), flush=True)
     if hgt_linearflag:
@@ -384,8 +418,11 @@ def main(argv=None):
         print('filtwidth_km:  {}'.format(filtwidth_km), file=f)
         print('filtwidth_xpixels:  {:.1f}'.format(x_stddev), file=f)
         print('filtwidth_ypixels:  {:.1f}'.format(y_stddev), file=f)
-        print('filtwidth_yr:  {:.3f}'.format(filtwidth_yr), file=f)
-        print('filtwidth_day:  {}'.format(int(filtwidth_yr*365.25)), file=f)
+        if lsq_tflag:
+            print('n_lsq_t:  {}'.format(n_lsq_t), file=f)
+        else:
+            print('filtwidth_yr:  {:.3f}'.format(filtwidth_yr), file=f)
+            print('filtwidth_day:  {}'.format(int(filtwidth_yr*365.25)), file=f)
         print('deg_ramp:  {}'.format(deg_ramp), file=f)
         print('demerr:  {}'.format(demerrflag*1), file=f)
         print('hgt_linear:  {}'.format(hgt_linearflag*1), file=f)
@@ -593,7 +630,9 @@ def main(argv=None):
 
 
     #%% Add info and close
-    cumfh5.create_dataset('filtwidth_yr', data=filtwidth_yr)
+    cumfh5.create_dataset('filtwidth_yr', data=filtwidth_yr) ## nan if lsq
+    if lsq_tflag:
+        cumfh5.create_dataset('n_lsq_t', data=n_lsq_t)
     cumfh5.create_dataset('filtwidth_km', data=filtwidth_km)
     cumfh5.create_dataset('deramp_flag', data=deg_ramp)
     cumfh5.create_dataset('hgt_linear_flag', data=hgt_linearflag*1)
@@ -757,7 +796,33 @@ def filter_wrapper(i):
 
 
     ### Second, HP in time
-    if filtwidth_yr == 0.0:
+    if lsq_tflag:
+        ## LP in time is the value at i of the linear fit (a+b*tau, tau=t-t_i)
+        ## to n_lsq_t epochs around i, shifted inward near both ends.
+        ## Solve the normal equations per pixel excluding nan.
+        i1 = min(max(i-n_lsq_t//2, 0), n_im-n_lsq_t)
+        tau = (dt_cum[i1:i1+n_lsq_t]-dt_cum[i])[:, np.newaxis, np.newaxis]
+
+        valid_data_mask = ~np.isnan(cum[i1:i1+n_lsq_t, :, :])
+        s0 = np.sum(valid_data_mask, axis=0, dtype=np.float32)
+        s1 = np.sum(tau*valid_data_mask, axis=0)
+        s2 = np.sum(tau**2*valid_data_mask, axis=0)
+        cum_win = np.where(valid_data_mask, cum[i1:i1+n_lsq_t, :, :], 0)
+        del valid_data_mask
+        y0 = np.sum(cum_win, axis=0)
+        y1 = np.sum(tau*cum_win, axis=0)
+        del cum_win
+
+        ## a = (s2*y0-s1*y1)/det. det is 0 if <2 valid data, where y0 is
+        ## the only valid data or 0. With <3 valid data, the line passes all
+        ## of them, i.e., no temporal filter.
+        det = s0*s2-s1**2
+        cum_lpt = np.divide(s2*y0-s1*y1, det, out=y0, where=det>0)
+
+        cum_hpt = cum[i, :, :] - cum_lpt
+        del s0, s1, s2, y0, y1, det, cum_lpt
+
+    elif filtwidth_yr == 0.0:
         cum_hpt = cum[i, :, :] ## No temporal filter
     else:
         time_diff_sq = (dt_cum[i]-dt_cum)**2

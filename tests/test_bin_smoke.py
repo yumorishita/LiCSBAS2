@@ -8,12 +8,16 @@ interferograms of a known linear velocity field, so the inverted
 velocity can be compared against the truth.
 """
 import re
+import shutil
+import subprocess
+import sys
 
 import h5py
 import numpy as np
 import pytest
 
 import LiCSBAS_io_lib as io_lib
+import synth
 
 pytestmark = pytest.mark.smoke
 
@@ -153,6 +157,9 @@ def test_step16_outputs(ts16, geocml):
     assert cumffile.exists()
     with h5py.File(str(cumffile), 'r') as f:
         cum_filt = f['cum'][()]
+        # Default is the linear fit in time, n_lsq_t 9 cut to 5 epochs
+        assert f['n_lsq_t'][()] == len(geocml.imdates)
+        assert np.isnan(f['filtwidth_yr'][()])
     n_im = len(geocml.imdates)
     assert cum_filt.shape == (n_im, geocml.length, geocml.width)
 
@@ -160,6 +167,89 @@ def test_step16_outputs(ts16, geocml):
                                geocml.length, geocml.width)
     assert np.all(np.isfinite(vel_filt))
     assert (ts16 / 'info' / '16parameters.txt').exists()
+
+
+def run16_copy(ts16, geocml, run_script, tsname, *args, add_cum=None):
+    """Run step 16 on a copy of the TS dir so that ts16 is not overwritten.
+    add_cum (n_im x length x width) is added to cum.h5 of the copy."""
+    tsdir = geocml.workdir / tsname
+    shutil.copytree(str(ts16), str(tsdir))
+    if add_cum is not None:
+        with h5py.File(str(tsdir / 'cum.h5'), 'r+') as f:
+            f['cum'][...] = f['cum'][()] + add_cum.astype(np.float32)
+    run_script('LiCSBAS16_filt_ts.py', '-t', tsname, '--n_para', '1', *args,
+               cwd=geocml.workdir)
+    return tsdir
+
+
+def test_step16_lsq_hp_in_time(ts16, geocml, run_script):
+    """LP in time is the value at each epoch of the linear fit to n_lsq_t
+    epochs around it, shifted inward near both ends. Add a nonlinear signal
+    to the linear synthetic data and make the spatial LP identity (tiny -s):
+    the filter must remove from each pixel exactly the residual of the signal
+    from that fit (HP in time), and leave the linear part unchanged."""
+    n = 3
+    t = synth.dt_cum_years()
+    g = np.array([0., 4., -3., 5., 1.])  # mm, nonlinear in any 3 epochs
+    x, y = np.meshgrid(np.arange(geocml.width), np.arange(geocml.length))
+    w = 1 + (x + y) / 18  # amplitude of g in each pixel, 1-2
+
+    hp = np.zeros_like(g)  # HP in time of g
+    for i in range(len(t)):
+        i1 = min(max(i - n // 2, 0), len(t) - n)
+        fit = np.polyfit(t[i1:i1 + n], g[i1:i1 + n], 1)
+        hp[i] = g[i] - np.polyval(fit, t[i])
+    assert np.all(np.abs(hp) > 1)  # every epoch is filtered
+
+    with h5py.File(str(ts16 / 'cum.h5'), 'r') as f:
+        cum = f['cum'][()]
+    tsdir = run16_copy(ts16, geocml, run_script, 'TS_GEOCml1_lsq3',
+                       '--n_lsq_t', str(n), '-s', '1e-5', '--nomask',
+                       add_cum=g[:, None, None] * w)
+
+    with h5py.File(str(tsdir / 'cum_filt.h5'), 'r') as f:
+        cum_filt = f['cum'][()]
+        assert f['n_lsq_t'][()] == n
+
+    # Compare up to a constant in each epoch, which depends on the ref
+    # point. cum of step 13 is linear to ~2e-3 mm (float32).
+    expected = cum + (g - hp)[:, None, None] * w
+    np.testing.assert_allclose(
+        cum_filt - cum_filt.mean(axis=(1, 2), keepdims=True),
+        expected - expected.mean(axis=(1, 2), keepdims=True), atol=3e-3)
+
+    params = (tsdir / 'info' / '16parameters.txt').read_text()
+    assert re.search(r'^n_lsq_t: +3$', params, re.M)
+    assert 'filtwidth_yr' not in params
+
+
+def test_step16_gauss_auto(ts16, geocml, run_script):
+    """-y auto uses the gaussian filter in time of avg_interval*3."""
+    tsdir = run16_copy(ts16, geocml, run_script, 'TS_GEOCml1_gauss',
+                       '-y', 'auto')
+
+    dt_yr = np.array(synth.dt_cum_years())
+    filtwidth_yr = dt_yr[-1] / (len(dt_yr) - 1) * 3
+    with h5py.File(str(tsdir / 'cum_filt.h5'), 'r') as f:
+        assert 'n_lsq_t' not in f
+        np.testing.assert_allclose(f['filtwidth_yr'][()], filtwidth_yr,
+                                   rtol=1e-6)
+
+    params = (tsdir / 'info' / '16parameters.txt').read_text()
+    assert re.search(r'^filtwidth_yr: +{}$'.format(
+        re.escape('{:.3f}'.format(filtwidth_yr))), params, re.M)
+    assert 'n_lsq_t' not in params
+
+
+def test_step16_n_lsq_t_and_y(ts15, geocml, bin_env, repo_root):
+    """-y and --n_lsq_t together is an error before processing."""
+    res = subprocess.run(
+        [sys.executable, str(repo_root / 'bin' / 'LiCSBAS16_filt_ts.py'),
+         '-t', 'TS_GEOCml1', '-y', '0.1', '--n_lsq_t', '9'],
+        env=bin_env, cwd=str(geocml.workdir), capture_output=True, text=True,
+        timeout=300)
+    assert res.returncode == 2
+    assert 'Both -y and --n_lsq_t' in res.stderr
 
 
 #%% Downstream tool: cum2vel

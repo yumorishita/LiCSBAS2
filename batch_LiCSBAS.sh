@@ -61,7 +61,8 @@ p15_n_ifg_noloop_thre=""	# default: 50
 p15_n_loop_err_thre=""	# default: 5
 p15_resid_rms_thre=""	# default: 2 mm
 p16_filtwidth_km=""	# default: 2 km
-p16_filtwidth_yr=""	# default: avg_interval*3 yr
+p16_n_lsq_t=""	# default: 9 (LP in time by linear fit to 9 epochs)
+p16_filtwidth_yr=""	# auto (avg_interval*3) or yr to use gaussian in time instead of p16_n_lsq_t
 p16_deg_deramp=""	# 1, bl, or 2. default: no deramp
 p16_demerr="n"	# y/n. default: n
 p16_hgt_linear="n"	# y/n. default: n
@@ -369,6 +370,7 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z $p16_TSdir ];then p16_op="$p16_op -t $p16_TSdir";
     else p16_op="$p16_op -t $TSdir"; fi
   if [ ! -z $p16_filtwidth_km ];then p16_op="$p16_op -s $p16_filtwidth_km"; fi
+  if [ ! -z $p16_n_lsq_t ];then p16_op="$p16_op --n_lsq_t $p16_n_lsq_t"; fi
   if [ ! -z $p16_filtwidth_yr ];then p16_op="$p16_op -y $p16_filtwidth_yr"; fi
   if [ ! -z $p16_deg_deramp ];then p16_op="$p16_op -r $p16_deg_deramp"; fi
   if [ $p16_demerr == "y" ];then p16_op="$p16_op --demerr"; fi
