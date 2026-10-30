@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This script applies spatio-temporal filter (HP in time and LP in space) to the time series of displacement. LP in time is a linear least squares fit to a fixed number of epochs around each epoch, which works similarly regardless of the time intervals, or a gaussian kernel (same as StaMPS) if -y option is used. LP in space uses a gaussian kernel. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 1-3.
+This script applies spatio-temporal filter (HP in time and LP in space) to the time series of displacement. LP in time is a linear least squares fit to a fixed number of epochs around each epoch, which works similarly regardless of the time intervals, or a gaussian kernel (same as StaMPS) if -y option is used. LP in space uses a gaussian kernel. Deramping (1D, bilinear, or 2D polynomial) can also be applied if -r option is used. Topography-correlated components (linear with elevation) can also be subtracted with --hgt_linear option simultaneously with deramping before spatio-temporal filtering. The impact of filtering (deramp and linear elevation as well) can be visually checked by showing 16filt*/*png. A stable reference point is determined after the filtering as well as Step 13, and the filtered time series and velocity are referenced to it (i.e., 0 there).
 
 ===============
 Input & output files
@@ -116,7 +116,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.7.0"; date=20261028; author="Y. Morishita"
+    ver="1.7.1"; date=20261030; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -565,7 +565,7 @@ def main(argv=None):
 
     ### Rerferencing cumulative displacement to new stable ref
     for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - cum[i, refy1s, refx1s]
+        cum_filt[i, :, :] = cum_filt[i, :, :] - cum_filt[i, refy1s, refx1s]
     del cum
 
     ### Save image

@@ -169,6 +169,28 @@ def test_step16_outputs(ts16, geocml):
     assert (ts16 / 'info' / '16parameters.txt').exists()
 
 
+def nonlinear_signal(geocml):
+    """Signal g (mm) nonlinear in any 3 epochs, of amplitude w (1-2) in
+    each pixel, to be added to the linear synthetic data."""
+    g = np.array([0., 4., -3., 5., 1.])
+    assert len(g) == len(geocml.imdates)
+    x, y = np.meshgrid(np.arange(geocml.width), np.arange(geocml.length))
+    w = 1 + (x / (geocml.width - 1) + y / (geocml.length - 1)) / 2
+    return g, w
+
+
+def hp_in_time(g, n):
+    """HP in time of g with --n_lsq_t n: the residual from the linear fit
+    to n epochs around each epoch, shifted inward near both ends."""
+    t = synth.dt_cum_years()
+    hp = np.zeros_like(g)
+    for i in range(len(t)):
+        i1 = min(max(i - n // 2, 0), len(t) - n)
+        fit = np.polyfit(t[i1:i1 + n], g[i1:i1 + n], 1)
+        hp[i] = g[i] - np.polyval(fit, t[i])
+    return hp
+
+
 def run16_copy(ts16, geocml, run_script, tsname, *args, add_cum=None):
     """Run step 16 on a copy of the TS dir so that ts16 is not overwritten.
     add_cum (n_im x length x width) is added to cum.h5 of the copy."""
@@ -189,16 +211,8 @@ def test_step16_lsq_hp_in_time(ts16, geocml, run_script):
     the filter must remove from each pixel exactly the residual of the signal
     from that fit (HP in time), and leave the linear part unchanged."""
     n = 3
-    t = synth.dt_cum_years()
-    g = np.array([0., 4., -3., 5., 1.])  # mm, nonlinear in any 3 epochs
-    x, y = np.meshgrid(np.arange(geocml.width), np.arange(geocml.length))
-    w = 1 + (x + y) / 18  # amplitude of g in each pixel, 1-2
-
-    hp = np.zeros_like(g)  # HP in time of g
-    for i in range(len(t)):
-        i1 = min(max(i - n // 2, 0), len(t) - n)
-        fit = np.polyfit(t[i1:i1 + n], g[i1:i1 + n], 1)
-        hp[i] = g[i] - np.polyval(fit, t[i])
+    g, w = nonlinear_signal(geocml)
+    hp = hp_in_time(g, n)
     assert np.all(np.abs(hp) > 1)  # every epoch is filtered
 
     with h5py.File(str(ts16 / 'cum.h5'), 'r') as f:
@@ -250,6 +264,61 @@ def test_step16_n_lsq_t_and_y(ts15, geocml, bin_env, repo_root):
         timeout=300)
     assert res.returncode == 2
     assert 'Both -y and --n_lsq_t' in res.stderr
+
+
+@pytest.fixture(scope='module')
+def ts16_nl(ts16, geocml, run_script):
+    """Step 16 with --n_lsq_t 5 on the data plus nonlinear_signal.
+
+    HP in time of the signal is >0.5 mm in every epoch and pixel (w >= 1),
+    so the filter phase is far from 0 also at the ref point; the tests below
+    rely on it to catch re-referencing with the unfiltered cum.
+    """
+    g, w = nonlinear_signal(geocml)
+    assert np.all(np.abs(hp_in_time(g, 5)) > 0.5)
+    return run16_copy(ts16, geocml, run_script, 'TS_GEOCml1_nl',
+                      '--n_lsq_t', '5', add_cum=g[:, None, None] * w)
+
+
+def read_ref16(tsdir):
+    ref = (tsdir / 'info' / '16ref.txt').read_text().strip()
+    return [int(s) for s in re.split('[:/]', ref)]
+
+
+def test_step16_zero_at_ref(ts16_nl, geocml):
+    """The filtered time series, velocity and intercept are referenced to the
+    stable ref point of step 16 (16ref.txt), so they are 0 there."""
+    x1, x2, y1, y2 = read_ref16(ts16_nl)
+    with h5py.File(str(ts16_nl / 'cum_filt.h5'), 'r') as f:
+        cum_filt = f['cum'][()]
+    np.testing.assert_array_equal(cum_filt[:, y1:y2, x1:x2], 0)
+
+    for name in ('vel.filt', 'vintercept.filt'):
+        data = io_lib.read_img(str(ts16_nl / 'results' / name),
+                               geocml.length, geocml.width)
+        np.testing.assert_allclose(data[y1:y2, x1:x2], 0, atol=1e-6,
+                                   err_msg=name)
+
+
+def test_step16_independent_of_cum_ref(ts16, ts16_nl, geocml, run_script):
+    """The results must not depend on the reference of cum.h5 from step 13.
+    Re-reference cum.h5 to another pixel (an offset in each epoch, nonlinear
+    in time) and run step 16 again: the same ref point is selected and the
+    results are the same."""
+    g, w = nonlinear_signal(geocml)
+    with h5py.File(str(ts16 / 'cum.h5'), 'r') as f:
+        cum_nl = f['cum'][()] + g[:, None, None] * w  # input of ts16_nl
+    py, px = geocml.length - 1, 0
+    tsdir = run16_copy(ts16, geocml, run_script, 'TS_GEOCml1_nl_reref',
+                       '--n_lsq_t', '5', add_cum=g[:, None, None] * w
+                       - cum_nl[:, py:py+1, px:px+1])
+
+    assert read_ref16(tsdir) == read_ref16(ts16_nl)
+    with h5py.File(str(ts16_nl / 'cum_filt.h5'), 'r') as f:
+        cum_filt = f['cum'][()]
+    with h5py.File(str(tsdir / 'cum_filt.h5'), 'r') as f:
+        cum_filt_reref = f['cum'][()]
+    np.testing.assert_allclose(cum_filt_reref, cum_filt, atol=1e-3)
 
 
 #%% Downstream tool: cum2vel
