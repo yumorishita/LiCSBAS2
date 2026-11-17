@@ -10,6 +10,8 @@ import re
 import time
 import math
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import dateutil
 import datetime as dt
 import numpy as np
@@ -34,6 +36,63 @@ def bl2xy(lon, lat, width, length, lat1, postlat, lon1, postlon):
 
 
 #%%
+def _make_session():
+    kw = dict(total=3, backoff_factor=1.5,
+              status_forcelist=(429, 500, 502, 503, 504),
+              respect_retry_after_header=True)
+    try:
+        retry = Retry(allowed_methods=frozenset(['HEAD', 'GET']), **kw)
+    except TypeError:  ## urllib3 < 1.26
+        retry = Retry(method_whitelist=frozenset(['HEAD', 'GET']), **kw)
+    adapter = HTTPAdapter(max_retries=retry)
+    session = requests.Session()
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+    return session
+
+
+_session = None
+_session_pid = None
+_stale_sessions = []  ## keep sessions inherited by fork alive (do not close parent's sockets)
+
+
+def get_session():
+    """
+    One requests.Session per process (a session must not be shared across
+    fork, which the parallel downloading in LiCSBAS01 uses).
+    """
+    global _session, _session_pid
+    pid = os.getpid()
+    if _session is None or _session_pid != pid:
+        if _session is not None:
+            _stale_sessions.append(_session)
+        _session = _make_session()
+        _session_pid = pid
+    return _session
+
+
+def request_retry(method, url, n_try=4, **kwargs):
+    """
+    requests with timeout, automatic retries (connection errors such as
+    SSLEOFError, and HTTP 429/5xx) and waiting between tries. Raises
+    requests.exceptions.RequestException only after all tries failed.
+    """
+    kwargs.setdefault('timeout', (20, 120))
+    kwargs.setdefault('allow_redirects', True)
+    for i in range(n_try):
+        try:
+            return get_session().request(method, url, **kwargs)
+        except requests.exceptions.RequestException as e:
+            if i == n_try-1:
+                raise
+            wait = min(10*2**i, 60)
+            print('    {} on {} {} (try {}/{}); waiting {}s...'.format(
+                e.__class__.__name__, method, os.path.basename(url),
+                i+1, n_try, wait), file=sys.stderr, flush=True)
+            time.sleep(wait)
+
+
+#%%
 def comp_size_time(file_remote, file_local):
     """
     Compare size and time of remote and local files.
@@ -44,7 +103,7 @@ def comp_size_time(file_remote, file_local):
         3 : Remote not exist
     """
 
-    response = requests.head(file_remote, allow_redirects=True)
+    response = request_retry('HEAD', file_remote)
 
     if response.status_code != 200:
         return 3
@@ -198,7 +257,7 @@ def extract_url_licsar(url):
     ''' new since Aug 2025+: URL gets different from direct to HTML file with a link..
     '''
     # first try if the direct url actually works (old version):
-    response = requests.head(url, allow_redirects=True)
+    response = request_retry('HEAD', url)
     if response.status_code == 200:
         return url
     else:
@@ -206,11 +265,11 @@ def extract_url_licsar(url):
         url = os.path.dirname(url)
         # transition period - both old and new version exist - try the temporary url:
         url = url.replace('LiCSAR_products/', 'LiCSAR_products.future/')
-        response = requests.get(url)
+        response = request_retry('GET', url)
         if response.status_code != 200:
             # perhaps already after the transition? Getting it back:
             url = url.replace('LiCSAR_products.future/', 'LiCSAR_products/')
-            response = requests.get(url)
+            response = request_retry('GET', url)
             if response.status_code != 200:
                 return None # this also does not exist
         response.encoding = response.apparent_encoding  # avoid garble
@@ -224,35 +283,59 @@ def extract_url_licsar(url):
 
 
 #%%
-def download_data(url, file, n_retry=3):
+def download_data(url, file, n_retry=5):
+    """
+    Download url to file. The data is first written to file+'.part' and
+    renamed only after the size is checked, so an incomplete download never
+    remains under the final name.
+    Returns True if succeeded, False if failed.
+    """
+    tmp = file + '.part'
     for i in range(n_retry):
         try:
             start = time.time()
-            with requests.get(url) as res:
+            with request_retry('GET', url, n_try=1, stream=True) as res:
                 res.raise_for_status()
-                size_remote = int(res.headers.get("Content-Length"))
-                with open(file, "wb") as output:
-                     output.write(res.content)
-                size_local = os.path.getsize(file)
-                if size_remote != size_local: ### Different size
-                    raise IOError('Downloaded file not complete')
+                _cl = res.headers.get("Content-Length")
+                size_remote = int(_cl) if _cl is not None else None
+                with open(tmp, "wb") as output:
+                    for chunk in res.iter_content(chunk_size=1024*1024):
+                        if chunk:
+                            output.write(chunk)
+            size_local = os.path.getsize(tmp)
+            if size_local == 0:
+                raise IOError('Downloaded file is empty')
+            if size_remote is not None and size_remote != size_local: ### Different size
+                raise IOError('Downloaded file not complete')
+            try:
+                os.replace(tmp, file)
+            except OSError:  ## e.g., some Windows-mounted file systems
+                if os.path.exists(file):
+                    os.remove(file)
+                os.rename(tmp, file)
 
             elapsed = int(time.time()-start)
             if elapsed==0: elapsed=elapsed+1
-            fsize = convert_size(os.path.getsize(file))
-            speed = convert_size(int(os.path.getsize(file)/elapsed))
+            fsize = convert_size(size_local)
+            speed = convert_size(int(size_local/elapsed))
             print('    {}, {}, {}s, {}/s'.format(os.path.basename(file),
                    fsize, elapsed, speed), flush=True)
-            return # success
+            return True # success
 
         except Exception as e:
-            print(    '    {} for {} in {}th try'.format(
+            print('    {} for {} in {}th try'.format(
                 e.__class__.__name__, os.path.basename(url), i+1), flush=True)
-            pass # try again
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            if i < n_retry-1:
+                time.sleep(min(5*(i+1), 30)) # wait, then try again
 
     print("    Error while downloading from {}".format(url),
           file=sys.stderr, flush=True)
-    return # fail
+    return False # fail
 
 
 #%%
