@@ -40,10 +40,7 @@ def _make_session():
     kw = dict(total=3, backoff_factor=1.5,
               status_forcelist=(429, 500, 502, 503, 504),
               respect_retry_after_header=True)
-    try:
-        retry = Retry(allowed_methods=frozenset(['HEAD', 'GET']), **kw)
-    except TypeError:  ## urllib3 < 1.26
-        retry = Retry(method_whitelist=frozenset(['HEAD', 'GET']), **kw)
+    retry = Retry(allowed_methods=frozenset(['HEAD', 'GET']), **kw)
     adapter = HTTPAdapter(max_retries=retry)
     session = requests.Session()
     session.mount('https://', adapter)
@@ -303,16 +300,11 @@ def download_data(url, file, n_retry=5):
                         if chunk:
                             output.write(chunk)
             size_local = os.path.getsize(tmp)
-            if size_local == 0:
+            if size_local == 0 and size_remote != 0:
                 raise IOError('Downloaded file is empty')
             if size_remote is not None and size_remote != size_local: ### Different size
                 raise IOError('Downloaded file not complete')
-            try:
-                os.replace(tmp, file)
-            except OSError:  ## e.g., some Windows-mounted file systems
-                if os.path.exists(file):
-                    os.remove(file)
-                os.rename(tmp, file)
+            os.replace(tmp, file)
 
             elapsed = int(time.time()-start)
             if elapsed==0: elapsed=elapsed+1
@@ -330,6 +322,8 @@ def download_data(url, file, n_retry=5):
                     os.remove(tmp)
                 except OSError:
                     pass
+            if isinstance(e, requests.exceptions.HTTPError):
+                break  # e.g. 404; retrying does not help
             if i < n_retry-1:
                 time.sleep(min(5*(i+1), 30)) # wait, then try again
 

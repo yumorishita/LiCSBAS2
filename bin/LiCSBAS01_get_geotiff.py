@@ -175,7 +175,7 @@ def main(argv=None):
         ### Get available dates
         print('Searching latest epoch for mli...', flush=True)
         url = os.path.join(LiCSARweb, trackID, frameID, 'epochs', '')
-        response = requests.get(url)
+        response = tools_lib.request_retry('GET', url)
         
         response.encoding = response.apparent_encoding #avoid garble
         html_doc = response.text
@@ -217,7 +217,7 @@ def main(argv=None):
         ### Get available dates
         print('\nDownload GACOS data', flush=True)
         url = os.path.join(LiCSARweb, trackID, frameID, 'epochs', '')
-        response = requests.get(url)
+        response = tools_lib.request_retry('GET', url)
         response.encoding = response.apparent_encoding #avoid garble
         html_doc = response.text
         soup = BeautifulSoup(html_doc, "html.parser")
@@ -281,7 +281,7 @@ def main(argv=None):
     ### Get available dates
     print('\nDownload geotiff of unw and cc', flush=True)
     url_ifgdir = os.path.join(LiCSARweb, trackID, frameID, 'interferograms', '')
-    response = requests.get(url_ifgdir)
+    response = tools_lib.request_retry('GET', url_ifgdir)
     
     response.encoding = response.apparent_encoding #avoid garble
     html_doc = response.text
@@ -456,7 +456,7 @@ def check_gacos_wrapper(args):
             print("Newer {} available.".format(bname_data), flush=True)
         return rc
     else:
-        response = requests.head(url_data, allow_redirects=True)
+        response = tools_lib.request_retry('HEAD', url_data)
         if response.status_code == 200:
             return 4
         else:
