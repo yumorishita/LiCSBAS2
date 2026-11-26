@@ -38,7 +38,6 @@ import os
 import re
 import sys
 import time
-import requests
 from bs4 import BeautifulSoup
 import numpy as np
 import datetime as dt
